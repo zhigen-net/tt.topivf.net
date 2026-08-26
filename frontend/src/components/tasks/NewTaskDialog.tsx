@@ -104,7 +104,7 @@ export function NewTaskDialog({ open, onClose }: Props) {
             <Label>Target Accounts {selectedAccounts.length > 0 && <span className="text-muted-foreground">({selectedAccounts.length} selected)</span>}</Label>
             {allowedAccounts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {contentId ? 'No accounts match this content's platforms.' : 'No accounts available.'}
+                {contentId ? "No accounts match this content's platforms." : 'No accounts available.'}
               </p>
             ) : (
               <div className="max-h-40 overflow-y-auto rounded-md border divide-y">
