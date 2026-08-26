@@ -1,0 +1,19 @@
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ':80'
+  websecure:
+    address: ':443'
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: public
+  file:
+    filename: /config/dynamic.yml
+    watch: true
+
+log:
+  level: INFO
