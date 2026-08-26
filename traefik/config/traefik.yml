@@ -10,7 +10,7 @@ entryPoints:
 providers:
   docker:
     exposedByDefault: false
-    network: public
+    network: tttopivfnet_public
   file:
     filename: /config/dynamic.yml
     watch: true
