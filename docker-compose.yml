@@ -29,8 +29,9 @@ services:
     labels:
       - 'traefik.enable=true'
       - 'traefik.docker.network=tttopivfnet_public'
-      - 'traefik.http.routers.frontend.rule=!PathPrefix(`/api`)'
+      - 'traefik.http.routers.frontend.rule=PathPrefix(`/`)'
       - 'traefik.http.routers.frontend.entrypoints=web'
+      - 'traefik.http.routers.frontend.priority=1'
       - 'traefik.http.services.frontend.loadbalancer.server.port=5173'
     networks:
       - public
@@ -55,6 +56,7 @@ services:
       - 'traefik.docker.network=tttopivfnet_public'
       - 'traefik.http.routers.api.rule=PathPrefix(`/api`)'
       - 'traefik.http.routers.api.entrypoints=web'
+      - 'traefik.http.routers.api.priority=10'
       - 'traefik.http.middlewares.api-strip.stripprefix.prefixes=/api'
       - 'traefik.http.routers.api.middlewares=api-strip'
       - 'traefik.http.services.api.loadbalancer.server.port=3000'
