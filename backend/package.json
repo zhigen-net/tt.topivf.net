@@ -73,6 +73,9 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.20.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@scarf/scarf", "msgpackr-extract", "unrs-resolver", "bcryptjs"]
+  },
   "jest": {
     "moduleFileExtensions": [
       "js",
