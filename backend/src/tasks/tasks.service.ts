@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
-import { InjectQueue } from '@nestjs/bull'
-import { Queue } from 'bull'
+import { InjectQueue } from '@nestjs/bullmq'
+import { Queue } from 'bullmq'
 import { PublishTask } from './publish-task.entity'
 
 @Injectable()
@@ -26,7 +26,7 @@ export class TasksService {
   async create(dto: Partial<PublishTask>) {
     const task = await this.repo.save(this.repo.create(dto))
     const delay = new Date(task.scheduledAt).getTime() - Date.now()
-    await this.publishQueue.add('publish-post', { taskId: task.id }, { delay: Math.max(0, delay), attempts: 3, backoff: 5000 })
+    await this.publishQueue.add('publish-post', { taskId: task.id }, { delay: Math.max(0, delay), attempts: 3, backoff: { type: 'fixed', delay: 5000 } })
     return task
   }
 

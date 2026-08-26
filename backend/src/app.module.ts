@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { BullModule } from '@nestjs/bull'
+import { BullModule } from '@nestjs/bullmq'
 import { AccountsModule } from './accounts/accounts.module'
 import { ContentsModule } from './contents/contents.module'
 import { TasksModule } from './tasks/tasks.module'
@@ -32,7 +32,7 @@ import appConfig from './config/app.config'
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({
-        redis: {
+        connection: {
           host: cfg.get('REDIS_HOST'),
           port: cfg.get<number>('REDIS_PORT'),
           password: cfg.get('REDIS_PASSWORD'),

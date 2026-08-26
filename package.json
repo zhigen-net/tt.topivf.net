@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"@nestjs/bullmq": "^11.0.5"
+	}
+}

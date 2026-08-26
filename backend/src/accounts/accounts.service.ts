@@ -20,14 +20,14 @@ export class AccountsService {
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
-      relations: ['proxy'],
+      relations: { proxy: true },
     })
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
   }
 
   async findOne(id: string) {
-    const account = await this.repo.findOne({ where: { id }, relations: ['proxy'] })
+    const account = await this.repo.findOne({ where: { id }, relations: { proxy: true } })
     if (!account) throw new NotFoundException(`Account ${id} not found`)
     return account
   }
