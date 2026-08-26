@@ -27,7 +27,7 @@ services:
       - VITE_API_URL=${VITE_API_URL}
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.frontend.rule=Host(`${APP_DOMAIN}`) && !PathPrefix(`/api`) && !PathPrefix(`/bull`)'
+      - 'traefik.http.routers.frontend.rule=Host(`${APP_DOMAIN}`) && !PathPrefix(`/api`)'
       - 'traefik.http.routers.frontend.entrypoints=web'
       - 'traefik.http.services.frontend.loadbalancer.server.port=5173'
     networks:
@@ -82,23 +82,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  bull-board:
-    image: ghcr.io/felixmosh/bull-board:latest
-    container_name: sh_bull_board
-    restart: unless-stopped
-    environment:
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-    labels:
-      - 'traefik.enable=true'
-      - 'traefik.http.routers.bull.rule=Host(`${APP_DOMAIN}`) && PathPrefix(`/bull`)'
-      - 'traefik.http.routers.bull.entrypoints=web'
-      - 'traefik.http.services.bull.loadbalancer.server.port=3000'
-    networks:
-      - public
-      - internal
 
   postgres:
     image: postgres:16-alpine
