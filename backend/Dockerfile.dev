@@ -5,4 +5,4 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts --config.confirmModulesPurge=false
 COPY . .
 EXPOSE 3000
-CMD ["pnpm", "--config.confirmModulesPurge=false", "start:dev"]
+CMD ["node_modules/.bin/nest", "start", "--watch"]
