@@ -24,7 +24,6 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=${VITE_API_URL}
       - CI=true
     labels:
       - 'traefik.enable=true'
