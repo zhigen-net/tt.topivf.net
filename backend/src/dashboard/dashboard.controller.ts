@@ -11,15 +11,15 @@ export class DashboardController {
   @Get('stats')
   async getStats() {
     const [accounts, contents, tasks, followers] = await Promise.all([
-      this.ds.query<[{ total: string }]>('SELECT COUNT(*) as total FROM account'),
-      this.ds.query<[{ total: string }]>('SELECT COUNT(*) as total FROM content'),
+      this.ds.query<[{ total: string }]>('SELECT COUNT(*) as total FROM accounts'),
+      this.ds.query<[{ total: string }]>('SELECT COUNT(*) as total FROM contents'),
       this.ds.query<[{ pending: string; running: string }]>(
         `SELECT
           SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) as pending,
           SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) as running
-        FROM publish_task`,
+        FROM publish_tasks`,
       ),
-      this.ds.query<[{ total: string }]>('SELECT COALESCE(SUM(followers), 0) as total FROM account'),
+      this.ds.query<[{ total: string }]>('SELECT COALESCE(SUM(followers), 0) as total FROM accounts'),
     ])
 
     return {
