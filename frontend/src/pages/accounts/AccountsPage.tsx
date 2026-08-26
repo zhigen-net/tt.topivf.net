@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Plus, Search, RefreshCw } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { Plus, Search, RefreshCw, Trash2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PlatformBadge } from '@/components/PlatformBadge'
+import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
 import { api } from '@/lib/api'
 import type { Account, AccountStatus } from '@/types'
 
@@ -15,11 +16,21 @@ const statusVariant: Record<AccountStatus, 'success' | 'destructive' | 'secondar
 }
 
 export default function AccountsPage() {
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => api.get<{ data: Account[]; total: number }>('/accounts').then((r) => r.data),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/accounts/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
   })
 
   const accounts = (data?.data ?? []).filter(
@@ -37,7 +48,7 @@ export default function AccountsPage() {
           <Button variant="outline" size="icon" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button>
+          <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" />
             Add Account
           </Button>
@@ -70,14 +81,12 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Loading...
-                </td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td>
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  No accounts found.
+                  {search ? 'No accounts match your search.' : 'No accounts yet. Add your first account.'}
                 </td>
               </tr>
             ) : (
@@ -85,27 +94,33 @@ export default function AccountsPage() {
                 <tr key={account.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                        {account.displayName[0]}
-                      </div>
+                      {account.avatar ? (
+                        <img src={account.avatar} alt={account.displayName} className="h-8 w-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                          {account.displayName[0]?.toUpperCase()}
+                        </div>
+                      )}
                       <div>
                         <div className="font-medium">{account.displayName}</div>
                         <div className="text-xs text-muted-foreground">@{account.username}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <PlatformBadge platform={account.platform} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusVariant[account.status]}>{account.status}</Badge>
-                  </td>
+                  <td className="px-4 py-3"><PlatformBadge platform={account.platform} /></td>
+                  <td className="px-4 py-3"><Badge variant={statusVariant[account.status]}>{account.status}</Badge></td>
                   <td className="px-4 py-3 text-right">{account.followers.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{account.postsCount}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{account.proxyId ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="sm">
-                      Edit
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(account.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </td>
                 </tr>
@@ -114,6 +129,8 @@ export default function AccountsPage() {
           </tbody>
         </table>
       </div>
+
+      <AddAccountDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   )
 }

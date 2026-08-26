@@ -8,6 +8,7 @@ import { TasksModule } from './tasks/tasks.module'
 import { AuthModule } from './auth/auth.module'
 import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
+import { DashboardModule } from './dashboard/dashboard.module'
 import appConfig from './config/app.config'
 
 @Module({
@@ -46,6 +47,7 @@ import appConfig from './config/app.config'
     TasksModule,
     ProxiesModule,
     AnalyticsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

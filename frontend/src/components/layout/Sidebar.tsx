@@ -1,9 +1,9 @@
-import { NavLink } from 'react-router-dom'
-import { Users, FileVideo, CalendarClock, BarChart3, Settings, Globe, Wifi } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Users, FileVideo, CalendarClock, BarChart3, Settings, Globe, Wifi, LogOut, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const nav = [
-  { to: '/', icon: BarChart3, label: 'Dashboard' },
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/accounts', icon: Users, label: 'Accounts' },
   { to: '/contents', icon: FileVideo, label: 'Contents' },
   { to: '/tasks', icon: CalendarClock, label: 'Publish Tasks' },
@@ -13,6 +13,13 @@ const nav = [
 ]
 
 export function Sidebar() {
+  const navigate = useNavigate()
+
+  function logout() {
+    localStorage.removeItem('token')
+    navigate('/login')
+  }
+
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-background">
       <div className="flex h-14 items-center gap-2 border-b px-4">
@@ -39,8 +46,14 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="border-t p-4">
-        <p className="text-xs text-muted-foreground">v0.1.0</p>
+      <div className="border-t p-3">
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
       </div>
     </aside>
   )

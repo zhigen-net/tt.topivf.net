@@ -1,8 +1,10 @@
-import { Plus } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { NewTaskDialog } from '@/components/tasks/NewTaskDialog'
 import { api } from '@/lib/api'
 import type { PublishTask, TaskStatus } from '@/types'
 
@@ -14,9 +16,21 @@ const statusVariant: Record<TaskStatus, 'default' | 'success' | 'destructive' | 
 }
 
 export default function TasksPage() {
+  const qc = useQueryClient()
+  const [newOpen, setNewOpen] = useState(false)
+
   const { data, isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: () => api.get<{ data: PublishTask[]; total: number }>('/tasks').then((r) => r.data),
+    refetchInterval: 10_000,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/tasks/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
   })
 
   const tasks = data?.data ?? []
@@ -28,7 +42,7 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold">Publish Tasks</h1>
           <p className="text-muted-foreground text-sm mt-1">{data?.total ?? 0} tasks total</p>
         </div>
-        <Button>
+        <Button onClick={() => setNewOpen(true)}>
           <Plus className="h-4 w-4" />
           New Task
         </Button>
@@ -50,30 +64,24 @@ export default function TasksPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Loading...
-                </td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td>
               </tr>
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  No tasks yet.
-                </td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No tasks yet.</td>
               </tr>
             ) : (
               tasks.map((task) => (
                 <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium">{task.content?.title ?? task.contentId}</td>
+                  <td className="px-4 py-3 font-medium">{task.content?.title ?? task.contentId.slice(0, 8)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 flex-wrap">
                       {task.platforms.map((p) => (
-                        <span key={p} className="text-xs text-muted-foreground capitalize">
-                          {p}
-                        </span>
+                        <span key={p} className="text-xs text-muted-foreground capitalize">{p}</span>
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3">{task.accountIds.length} accounts</td>
+                  <td className="px-4 py-3 text-muted-foreground">{task.accountIds.length} accounts</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {format(new Date(task.scheduledAt), 'MMM d, HH:mm')}
                   </td>
@@ -81,11 +89,19 @@ export default function TasksPage() {
                     <Badge variant={statusVariant[task.status]}>{task.status}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {task.results.filter((r) => r.success).length}/{task.results.length} success
+                    {task.results.length > 0
+                      ? `${task.results.filter((r) => r.success).length}/${task.results.length} ok`
+                      : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="sm">
-                      View
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(task.id)}
+                      disabled={deleteMutation.isPending || task.status === 'running'}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </td>
                 </tr>
@@ -94,6 +110,8 @@ export default function TasksPage() {
           </tbody>
         </table>
       </div>
+
+      <NewTaskDialog open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   )
 }
