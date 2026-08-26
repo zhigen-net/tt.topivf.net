@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsEnum, IsObject, IsOptional, IsString, IsUUID } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import type { Platform } from '../account.entity'
 
@@ -29,4 +29,9 @@ export class CreateAccountDto {
   @IsOptional()
   @IsUUID()
   groupId?: string
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsObject()
+  sessionData?: Record<string, unknown>
 }

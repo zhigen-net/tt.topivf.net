@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { NewTaskDialog } from '@/components/tasks/NewTaskDialog'
+import { TaskDetailDialog } from '@/components/tasks/TaskDetailDialog'
 import { api } from '@/lib/api'
 import type { PublishTask, TaskStatus } from '@/types'
 
@@ -18,6 +19,7 @@ const statusVariant: Record<TaskStatus, 'default' | 'success' | 'destructive' | 
 export default function TasksPage() {
   const qc = useQueryClient()
   const [newOpen, setNewOpen] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<PublishTask | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks'],
@@ -72,7 +74,7 @@ export default function TasksPage() {
               </tr>
             ) : (
               tasks.map((task) => (
-                <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedTask(task)}>
                   <td className="px-4 py-3 font-medium">{task.content?.title ?? task.contentId.slice(0, 8)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 flex-wrap">
@@ -93,7 +95,7 @@ export default function TasksPage() {
                       ? `${task.results.filter((r) => r.success).length}/${task.results.length} ok`
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -112,6 +114,7 @@ export default function TasksPage() {
       </div>
 
       <NewTaskDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      <TaskDetailDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
     </div>
   )
 }

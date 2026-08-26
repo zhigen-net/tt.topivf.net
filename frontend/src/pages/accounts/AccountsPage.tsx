@@ -33,6 +33,12 @@ export default function AccountsPage() {
     },
   })
 
+  const statusToggleMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: AccountStatus }) =>
+      api.patch(`/accounts/${id}/status`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+  })
+
   const accounts = (data?.data ?? []).filter(
     (a) => a.username.includes(search) || a.displayName.toLowerCase().includes(search.toLowerCase()),
   )
@@ -108,7 +114,19 @@ export default function AccountsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3"><PlatformBadge platform={account.platform} /></td>
-                  <td className="px-4 py-3"><Badge variant={statusVariant[account.status]}>{account.status}</Badge></td>
+                  <td className="px-4 py-3">
+                    <button
+                      title="Click to toggle active/inactive"
+                      disabled={statusToggleMutation.isPending}
+                      onClick={() => statusToggleMutation.mutate({
+                        id: account.id,
+                        status: account.status === 'active' ? 'inactive' : 'active',
+                      })}
+                      className="cursor-pointer disabled:opacity-50"
+                    >
+                      <Badge variant={statusVariant[account.status]}>{account.status}</Badge>
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-right">{account.followers.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{account.postsCount}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{account.proxyId ?? '—'}</td>

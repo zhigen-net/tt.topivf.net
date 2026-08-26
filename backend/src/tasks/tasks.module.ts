@@ -5,11 +5,15 @@ import { PublishTask } from './publish-task.entity'
 import { TasksController } from './tasks.controller'
 import { TasksService } from './tasks.service'
 import { TasksProcessor } from './tasks.processor'
+import { AccountsModule } from '../accounts/accounts.module'
+import { PlatformsModule } from '../platforms/platforms.module'
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PublishTask]),
     BullModule.registerQueue({ name: 'publish' }),
+    AccountsModule,
+    PlatformsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService, TasksProcessor],

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import type { Platform } from '@/types'
@@ -27,9 +28,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [avatar, setAvatar] = useState('')
+  const [cookies, setCookies] = useState('')
 
   const mutation = useMutation({
-    mutationFn: () => api.post('/accounts', { platform, username, displayName, avatar: avatar || undefined }),
+    mutationFn: () => api.post('/accounts', {
+      platform, username, displayName,
+      avatar: avatar || undefined,
+      sessionData: cookies.trim() ? { cookies: cookies.trim() } : undefined,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
@@ -42,6 +48,7 @@ export function AddAccountDialog({ open, onClose }: Props) {
     setUsername('')
     setDisplayName('')
     setAvatar('')
+    setCookies('')
     onClose()
   }
 
@@ -91,6 +98,17 @@ export function AddAccountDialog({ open, onClose }: Props) {
               placeholder="https://..."
               value={avatar}
               onChange={(e) => setAvatar(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Cookies / Session <span className="text-muted-foreground">(optional)</span></Label>
+            <Textarea
+              placeholder="Paste browser cookies for this account…"
+              rows={3}
+              value={cookies}
+              onChange={(e) => setCookies(e.target.value)}
+              className="font-mono text-xs"
             />
           </div>
 
