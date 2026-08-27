@@ -35,6 +35,7 @@ export class TiktokLoginService {
   async startSession(): Promise<{ sessionId: string; qrCodeBase64: string }> {
     const context = await this.browserManager.newStealthContext()
     const page = await context.newPage()
+    this.logPassportResponses(page)
 
     try {
       await page.goto(QR_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
@@ -117,6 +118,33 @@ export class TiktokLoginService {
 
   async cancelSession(sessionId: string): Promise<void> {
     await this.closeSession(sessionId)
+  }
+
+  /**
+   * 扫码被拒时页面上只显示一句"请换个方式登录"，真实原因在 passport 接口的
+   * error_code / description 里。轮询接口每秒都调，按 status 去重避免刷屏。
+   */
+  private logPassportResponses(page: Page): void {
+    let lastStatus = ''
+    page.on('response', (res) => {
+      const url = res.url()
+      if (!url.includes('/passport/web/')) return
+      void res
+        .json()
+        .then((body: any) => {
+          const status = body?.data?.status ?? ''
+          const code = body?.error_code ?? body?.data?.error_code
+          const key = `${status}|${code}`
+          if (key === lastStatus) return
+          lastStatus = key
+          this.logger.log(
+            `passport ${new URL(url).pathname} -> status=${status} code=${code} desc=${
+              body?.description ?? body?.data?.description ?? ''
+            } msg=${body?.message ?? ''}`,
+          )
+        })
+        .catch(() => {})
+    })
   }
 
   private async captureQrCode(page: Page, sessionId: string): Promise<string> {
