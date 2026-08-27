@@ -125,20 +125,18 @@ export class TiktokLoginService {
    * error_code / description 里。轮询接口每秒都调，按 status 去重避免刷屏。
    */
   private logPassportResponses(page: Page): void {
-    let lastStatus = ''
     page.on('response', (res) => {
       const url = res.url()
       if (!url.includes('/passport/web/')) return
+      const u = new URL(url)
+      const token = (u.searchParams.get('token') ?? '').slice(0, 8)
       void res
         .json()
         .then((body: any) => {
-          const status = body?.data?.status ?? ''
-          const code = body?.error_code ?? body?.data?.error_code
-          const key = `${status}|${code}`
-          if (key === lastStatus) return
-          lastStatus = key
           this.logger.log(
-            `passport ${new URL(url).pathname} -> status=${status} code=${code} desc=${
+            `passport ${u.pathname} token=${token} -> status=${
+              body?.data?.status ?? ''
+            } code=${body?.error_code ?? body?.data?.error_code} desc=${
               body?.description ?? body?.data?.description ?? ''
             } msg=${body?.message ?? ''}`,
           )
