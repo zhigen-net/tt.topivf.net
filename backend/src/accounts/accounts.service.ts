@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, FindOptionsWhere, ILike } from 'typeorm'
 import { Account, Platform, AccountStatus } from './account.entity'
 import { CreateAccountDto } from './dto/create-account.dto'
+import type { PlatformsService } from '../platforms/platforms.service'
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name)
   constructor(@InjectRepository(Account) private repo: Repository<Account>) {}
 
   async findAll(opts: { platform?: Platform; status?: AccountStatus; search?: string; page?: number; limit?: number }) {
@@ -55,5 +57,34 @@ export class AccountsService {
 
   async updateStats(id: string, stats: Partial<Pick<Account, 'followers' | 'following' | 'postsCount'>>) {
     await this.repo.update(id, { ...stats, lastActiveAt: new Date() })
+  }
+
+  async sync(id: string, platforms: PlatformsService): Promise<Account & { healthy: boolean }> {
+    const account = await this.findOne(id)
+    const adapter = platforms.getAdapter(account.platform)
+
+    let healthy = account.status === 'active'
+
+    if (adapter) {
+      try {
+        const [stats, isHealthy] = await Promise.all([
+          adapter.fetchStats(account),
+          adapter.checkHealth(account),
+        ])
+        healthy = isHealthy
+        await this.repo.update(id, {
+          followers: stats.followers,
+          following: stats.following,
+          postsCount: stats.postsCount,
+          lastActiveAt: new Date(),
+        })
+        this.logger.log(`Synced ${account.platform} @${account.username}: ${stats.followers} followers, healthy=${isHealthy}`)
+      } catch (err) {
+        this.logger.warn(`Sync failed for ${account.platform} @${account.username}: ${err}`)
+      }
+    }
+
+    const updated = await this.findOne(id)
+    return { ...updated, healthy }
   }
 }

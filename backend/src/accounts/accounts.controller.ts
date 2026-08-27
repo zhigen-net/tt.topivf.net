@@ -3,12 +3,16 @@ import { ApiTags, ApiQuery, ApiBearerAuth } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAccountDto } from './dto/create-account.dto'
 import type { Platform, AccountStatus } from './account.entity'
+import { PlatformsService } from '../platforms/platforms.service'
 
 @ApiTags('accounts')
 @ApiBearerAuth()
 @Controller('accounts')
 export class AccountsController {
-  constructor(private readonly svc: AccountsService) {}
+  constructor(
+    private readonly svc: AccountsService,
+    private readonly platforms: PlatformsService,
+  ) {}
 
   @Get()
   @ApiQuery({ name: 'platform', required: false })
@@ -44,6 +48,11 @@ export class AccountsController {
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body('status') status: AccountStatus) {
     return this.svc.updateStatus(id, status)
+  }
+
+  @Post(':id/sync')
+  sync(@Param('id') id: string) {
+    return this.svc.sync(id, this.platforms)
   }
 
   @Delete(':id')

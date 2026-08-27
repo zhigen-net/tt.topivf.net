@@ -105,6 +105,30 @@ export class TiktokAdapter extends PlatformAdapter {
   }
 
   async fetchStats(account: Account): Promise<AccountStats> {
+    try {
+      // TikTok 公开 API —— 不需要 Cookie，适合公开主页
+      const url = `https://www.tiktok.com/api/user/detail/?uniqueId=${encodeURIComponent(account.username)}&aid=1988&app_name=tiktok_web`
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Referer': 'https://www.tiktok.com/',
+        },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (res.ok) {
+        const data: any = await res.json()
+        const user = data?.userInfo?.user
+        if (user) {
+          return {
+            followers: user.followerCount ?? account.followers,
+            following: user.followingCount ?? account.following,
+            postsCount: user.videoCount ?? account.postsCount,
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`fetchStats HTTP failed for @${account.username}: ${err}`)
+    }
     return {
       followers: account.followers,
       following: account.following,
@@ -113,7 +137,28 @@ export class TiktokAdapter extends PlatformAdapter {
   }
 
   async checkHealth(account: Account): Promise<boolean> {
-    return account.status === 'active'
+    const raw = account.sessionData?.cookies
+    if (!raw) return false
+    try {
+      // 解析 cookie，拼 Cookie header，访问轻量接口验证登录态
+      const cookies = parseCookiesForHeader(raw)
+      if (!cookies) return false
+
+      const res = await fetch('https://www.tiktok.com/api/user/detail/?uniqueId=me&aid=1988', {
+        headers: {
+          'Cookie': cookies,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Referer': 'https://www.tiktok.com/',
+        },
+        signal: AbortSignal.timeout(8_000),
+      })
+      if (!res.ok) return false
+      const data: any = await res.json()
+      // 登录后 statusCode=0 且 userInfo 有值
+      return data?.statusCode === 0 && !!data?.userInfo?.user
+    } catch {
+      return false
+    }
   }
 
   private async checkLogin(page: import('playwright').Page): Promise<boolean> {
@@ -136,7 +181,31 @@ export class TiktokAdapter extends PlatformAdapter {
   }
 }
 
-// ─── 工具函数 ────────────────────────────────────────────────────────────────
+// ─── 工具函数 ──────────────────────────────────────────────────────────────
+
+function parseCookiesForHeader(raw: unknown): string | null {
+  try {
+    let list: Array<{ name: string; value: string }>
+    if (typeof raw === 'string') {
+      const t = raw.trim()
+      if (t.startsWith('[')) {
+        list = JSON.parse(t)
+      } else {
+        // "name=value; name2=value2" 格式
+        return t
+      }
+    } else if (Array.isArray(raw)) {
+      list = raw as any
+    } else {
+      return null
+    }
+    return list.map((c) => `${c.name}=${c.value}`).join('; ')
+  } catch {
+    return null
+  }
+}
+
+
 
 async function fetchBuffer(url: string): Promise<Buffer> {
   const res = await fetch(url)
