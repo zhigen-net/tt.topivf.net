@@ -3,12 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, FindOptionsWhere, ILike } from 'typeorm'
 import { Account, Platform, AccountStatus } from './account.entity'
 import { CreateAccountDto } from './dto/create-account.dto'
+import { BrowserManager } from '../platforms/browser-manager.service'
 import type { PlatformsService } from '../platforms/platforms.service'
 
 @Injectable()
 export class AccountsService {
   private readonly logger = new Logger(AccountsService.name)
-  constructor(@InjectRepository(Account) private repo: Repository<Account>) {}
+  constructor(
+    @InjectRepository(Account) private repo: Repository<Account>,
+    private readonly browserManager: BrowserManager,
+  ) {}
 
   async findAll(opts: { platform?: Platform; status?: AccountStatus; search?: string; page?: number; limit?: number }) {
     const { platform, status, search, page = 1, limit = 20 } = opts
@@ -42,12 +46,17 @@ export class AccountsService {
   async update(id: string, dto: Partial<CreateAccountDto>) {
     await this.findOne(id)
     await this.repo.update(id, dto as any)
+    // cookie 只在 context 创建那一刻注入，不丢掉缓存的话新 cookie 永远不会生效
+    if (dto.sessionData !== undefined || dto.proxyId !== undefined) {
+      await this.browserManager.closeContext(id)
+    }
     return this.findOne(id)
   }
 
   async remove(id: string) {
     const account = await this.findOne(id)
     await this.repo.remove(account)
+    await this.browserManager.closeContext(id)
   }
 
   async updateStatus(id: string, status: AccountStatus) {
