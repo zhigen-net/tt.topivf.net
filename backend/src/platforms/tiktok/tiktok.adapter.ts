@@ -140,6 +140,8 @@ export class TiktokAdapter extends PlatformAdapter {
         return stats.user
       }
       this.logger.warn(`fetchStats: no userInfo in __UNIVERSAL_DATA__ keys=[${(stats._keys ?? []).join(',')}] for @${account.username}`)
+      // 截图调试，查看 TikTok 实际渲染内容
+      await page.screenshot({ path: `/tmp/tiktok-fetchstats-${account.id}.png` }).catch(() => {})
     } catch (err) {
       this.logger.warn(`fetchStats browser failed for @${account.username}: ${err}`)
     } finally {
