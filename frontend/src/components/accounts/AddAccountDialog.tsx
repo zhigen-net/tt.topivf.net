@@ -31,6 +31,8 @@ export function AddAccountDialog({ open, onClose }: Props) {
   const [displayName, setDisplayName] = useState('')
   const [avatar, setAvatar] = useState('')
   const [cookies, setCookies] = useState('')
+  // 靠 cookie 内容长相判断来源会把手动粘贴的 JSON 误认成登录所得，从而把输入框收起来
+  const [cookiesFromLogin, setCookiesFromLogin] = useState(false)
   const [tiktokLoginOpen, setTiktokLoginOpen] = useState(false)
 
   const mutation = useMutation({
@@ -52,6 +54,7 @@ export function AddAccountDialog({ open, onClose }: Props) {
     setDisplayName('')
     setAvatar('')
     setCookies('')
+    setCookiesFromLogin(false)
     onClose()
   }
 
@@ -65,11 +68,12 @@ export function AddAccountDialog({ open, onClose }: Props) {
     if (result.displayName) setDisplayName(result.displayName)
     if (result.avatar) setAvatar(result.avatar)
     setCookies(result.cookies)
+    setCookiesFromLogin(true)
     setTiktokLoginOpen(false)
   }
 
   const isTikTok = platform === 'tiktok'
-  const hasQrCookies = isTikTok && cookies.trim().startsWith('[')
+  const hasQrCookies = isTikTok && cookiesFromLogin
 
   return (
     <>
@@ -151,10 +155,13 @@ export function AddAccountDialog({ open, onClose }: Props) {
                   <span className="text-muted-foreground ml-1">(optional)</span>
                 </Label>
                 <Textarea
-                  placeholder={isTikTok ? '或手动粘贴 Cookie…' : '粘贴 Cookie 字符串…'}
+                  placeholder={isTikTok ? '或手动粘贴 Cookie（支持 Cookie-Editor 导出的 JSON）…' : '粘贴 Cookie 字符串…'}
                   rows={3}
                   value={cookies}
-                  onChange={(e) => setCookies(e.target.value)}
+                  onChange={(e) => {
+                    setCookies(e.target.value)
+                    setCookiesFromLogin(false)
+                  }}
                   className="font-mono text-xs"
                 />
               </div>
