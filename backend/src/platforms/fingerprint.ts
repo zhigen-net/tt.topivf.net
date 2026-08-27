@@ -40,11 +40,9 @@ export function buildContextOptions(browserVersion: string, timezoneId: string) 
     viewport: { width: 1280, height: 800 },
     locale: 'zh-CN',
     timezoneId,
-    extraHTTPHeaders: {
-      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      // Playwright 覆盖 UA 头时不会同步改 Client Hints，需要手动对齐
-      'Sec-CH-UA-Platform': '"Windows"',
-    },
+    // Playwright 覆盖 UA 头时不会同步改 Client Hints，需要手动对齐。
+    // Accept-Language 不在此处设置：它由 locale 决定，extraHTTPHeaders 覆盖不了。
+    extraHTTPHeaders: { 'Sec-CH-UA-Platform': '"Windows"' },
   }
 }
 
