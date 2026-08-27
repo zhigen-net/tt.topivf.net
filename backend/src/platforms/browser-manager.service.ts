@@ -3,6 +3,19 @@ import { chromium, Browser, BrowserContext } from 'playwright'
 import type { Account } from '../accounts/account.entity'
 import type { Proxy } from '../proxies/proxy.entity'
 
+/**
+ * 登录与登录后操作必须共用同一套指纹：两者不一致本身就是风控信号。
+ * 时区需与出口 IP 的地理位置一致，否则 TikTok 的 secsdk 会判定为异常。
+ * 不覆盖 userAgent —— 有头模式下 Chromium 上报真实 UA，手工伪造反而会
+ * 与 navigator.userAgentData 上报的真实版本对不上。
+ */
+export const BROWSER_FINGERPRINT = {
+  viewport: { width: 1280, height: 800 },
+  locale: 'zh-CN',
+  timezoneId: process.env.BROWSER_TIMEZONE ?? 'America/Los_Angeles',
+  extraHTTPHeaders: { 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
+}
+
 @Injectable()
 export class BrowserManager implements OnModuleDestroy {
   private readonly logger = new Logger(BrowserManager.name)
@@ -12,8 +25,10 @@ export class BrowserManager implements OnModuleDestroy {
   private async getBrowser(): Promise<Browser> {
     if (!this.browser || !this.browser.isConnected()) {
       this.logger.log('Launching Chromium…')
+      // 有头模式（容器内由 xvfb 提供虚拟显示），headless Chromium 会被
+      // TikTok 的 webmssdk 指纹检测识别
       this.browser = await chromium.launch({
-        headless: true,
+        headless: false,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -33,20 +48,8 @@ export class BrowserManager implements OnModuleDestroy {
     const browser = await this.getBrowser()
 
     const context = await browser.newContext({
+      ...BROWSER_FINGERPRINT,
       proxy: account.proxy ? buildProxyConfig(account.proxy) : undefined,
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 800 },
-      locale: 'zh-CN',
-      timezoneId: 'Asia/Shanghai',
-      // Hide WebDriver flag
-      extraHTTPHeaders: { 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
-    })
-
-    // Remove navigator.webdriver fingerprint
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
     })
 
     await this.injectCookies(context, account)

@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common'
-import { BrowserManager } from '../browser-manager.service'
+import { BrowserManager, BROWSER_FINGERPRINT } from '../browser-manager.service'
 import type { BrowserContext, Page } from 'playwright'
 import { randomUUID } from 'crypto'
 
@@ -34,17 +34,7 @@ export class TiktokLoginService {
 
   async startSession(): Promise<{ sessionId: string; qrCodeBase64: string }> {
     const browser = await (this.browserManager as any).getBrowser()
-    const context: BrowserContext = await browser.newContext({
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 800 },
-      locale: 'zh-CN',
-    })
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-    })
-
+    const context: BrowserContext = await browser.newContext(BROWSER_FINGERPRINT)
     const page = await context.newPage()
 
     try {
