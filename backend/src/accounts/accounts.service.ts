@@ -39,7 +39,7 @@ export class AccountsService {
 
   async update(id: string, dto: Partial<CreateAccountDto>) {
     await this.findOne(id)
-    await this.repo.update(id, dto)
+    await this.repo.update(id, dto as any)
     return this.findOne(id)
   }
 
