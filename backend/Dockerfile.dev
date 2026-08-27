@@ -18,7 +18,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --config.confirmModulesPurge=false
+RUN pnpm install --frozen-lockfile --ignore-scripts --config.confirmModulesPurge=false
 
 # Download Chromium binary to a fixed path inside the image
 RUN npx playwright install chromium
