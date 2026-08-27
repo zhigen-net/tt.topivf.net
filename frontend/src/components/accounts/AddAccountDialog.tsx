@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { QrCode } from 'lucide-react'
+import { KeyRound } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,14 +94,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
               </Select>
             </div>
 
-            {/* TikTok 专属：QR 扫码登录 */}
+            {/* TikTok 专属：账号密码登录（可切换扫码） */}
             {isTikTok && (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">扫码登录</p>
+                    <p className="text-sm font-medium">登录 TikTok</p>
                     <p className="text-xs text-muted-foreground">
-                      {hasQrCookies ? '✓ 已通过扫码获取登录状态' : '推荐：用手机扫码，自动获取登录凭证'}
+                      {hasQrCookies ? '✓ 已获取登录状态' : '账号密码登录，自动获取登录凭证'}
                     </p>
                   </div>
                   <Button
@@ -109,8 +109,8 @@ export function AddAccountDialog({ open, onClose }: Props) {
                     size="sm"
                     onClick={() => setTiktokLoginOpen(true)}
                   >
-                    <QrCode className="h-3.5 w-3.5 mr-1.5" />
-                    {hasQrCookies ? '重新扫码' : '扫码登录'}
+                    <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                    {hasQrCookies ? '重新登录' : '登录'}
                   </Button>
                 </div>
               </div>

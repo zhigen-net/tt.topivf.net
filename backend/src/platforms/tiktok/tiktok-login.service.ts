@@ -2,11 +2,14 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { BrowserManager } from '../browser-manager.service'
 import type { BrowserContext, Page } from 'playwright'
 import { randomUUID } from 'crypto'
+import type { LoginInputDto, StartLoginSessionDto } from './dto/login-session.dto'
 
 export type LoginSessionStatus = 'pending' | 'success' | 'failed' | 'expired'
+export type LoginMode = 'qr' | 'password'
 
 export interface LoginSession {
   id: string
+  mode: LoginMode
   context: BrowserContext
   page: Page
   status: LoginSessionStatus
@@ -15,12 +18,16 @@ export interface LoginSession {
   username?: string
   displayName?: string
   avatar?: string
+  /** TikTok 返回的原始错误文案，用于在前端提示"密码错误"这类具体原因 */
+  lastError?: string
   createdAt: Date
   expiresAt: Date
 }
 
-const SESSION_TTL_MS = 5 * 60 * 1000  // 5 分钟
+// 滑块验证和二次验证码都要人工操作，5 分钟不够用
+const SESSION_TTL_MS = 10 * 60 * 1000
 const QR_LOGIN_URL = 'https://www.tiktok.com/login/qrcode'
+const PASSWORD_LOGIN_URL = 'https://www.tiktok.com/login/phone-or-email/email'
 
 @Injectable()
 export class TiktokLoginService {
@@ -32,52 +39,54 @@ export class TiktokLoginService {
     setInterval(() => this.cleanExpired(), 60_000)
   }
 
-  async startSession(): Promise<{ sessionId: string; qrCodeBase64: string }> {
+  async startSession(
+    dto: StartLoginSessionDto = {},
+  ): Promise<{ sessionId: string; mode: LoginMode; qrCodeBase64?: string }> {
+    const mode: LoginMode = dto.method === 'qr' ? 'qr' : 'password'
     const context = await this.browserManager.newStealthContext()
     const page = await context.newPage()
-    this.logPassportResponses(page)
-
-    try {
-      await page.goto(QR_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
-      // 等待 JS 渲染
-      await page.waitForTimeout(2_000)
-      // 如果当前页面没有 qrcode 路径，尝试点击二维码登录 tab
-      if (!page.url().includes('qrcode')) {
-        const qrTab = await page.$('[data-e2e="qrcode-tab"], [class*="qrcode-tab"], div:has-text("使用二维码登录"), button:has-text("QR code")')
-        if (qrTab) {
-          await qrTab.click()
-          await page.waitForTimeout(1_500)
-        }
-      }
-    } catch (e) {
-      await context.close()
-      throw new Error(`无法打开 TikTok 登录页: ${e}`)
-    }
 
     const sessionId = randomUUID()
     const now = new Date()
     const session: LoginSession = {
       id: sessionId,
+      mode,
       context,
       page,
       status: 'pending',
       qrRefreshedAt: now,
       createdAt: now,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
     }
     this.sessions.set(sessionId, session)
+    this.watchPassportResponses(session)
 
-    const qrCodeBase64 = await this.captureQrCode(page, sessionId)
-    return { sessionId, qrCodeBase64 }
+    try {
+      if (mode === 'qr') {
+        await this.openQrLogin(page)
+      } else {
+        await this.openPasswordLogin(session, dto)
+      }
+    } catch (e) {
+      await this.closeSession(sessionId)
+      throw new Error(`无法打开 TikTok 登录页: ${e}`)
+    }
+
+    if (mode === 'qr') {
+      return { sessionId, mode, qrCodeBase64: await this.captureQrCode(page, sessionId) }
+    }
+    return { sessionId, mode }
   }
 
   async getSessionStatus(sessionId: string): Promise<{
     status: LoginSessionStatus
+    mode?: LoginMode
     qrCodeBase64?: string
     username?: string
     displayName?: string
     avatar?: string
     cookies?: string
+    lastError?: string
   }> {
     const session = this.sessions.get(sessionId)
     if (!session) throw new NotFoundException('Session not found or expired')
@@ -91,10 +100,12 @@ export class TiktokLoginService {
     if (session.status === 'success' || session.status === 'failed') {
       return {
         status: session.status,
+        mode: session.mode,
         username: session.username,
         displayName: session.displayName,
         avatar: session.avatar,
         cookies: session.cookies,
+        lastError: session.lastError,
       }
     }
 
@@ -103,49 +114,132 @@ export class TiktokLoginService {
     if (loggedIn) {
       await this.captureSessionData(session)
       return {
-        status: 'success',
+        status: session.status,
+        mode: session.mode,
         username: session.username,
         displayName: session.displayName,
         avatar: session.avatar,
         cookies: session.cookies,
+        lastError: session.lastError,
       }
+    }
+
+    // 密码模式下画面由 /screen 单独拉取，这里只回状态
+    if (session.mode === 'password') {
+      return { status: 'pending', mode: session.mode, lastError: session.lastError }
     }
 
     // 还在等待扫码 — 刷新二维码截图（TikTok 二维码会过期刷新）
     const qrCodeBase64 = await this.captureQrCode(session.page, sessionId)
-    return { status: 'pending', qrCodeBase64 }
+    return { status: 'pending', mode: session.mode, qrCodeBase64 }
+  }
+
+  /** 远程画面：滑块、二次验证这类挑战都靠它交给用户手动完成 */
+  async getScreen(sessionId: string): Promise<{ screenBase64: string; width: number; height: number }> {
+    const session = this.requireLive(sessionId)
+    const buf = await session.page.screenshot({ type: 'jpeg', quality: 60 })
+    const viewport = session.page.viewportSize() ?? { width: 1280, height: 800 }
+    return { screenBase64: buf.toString('base64'), ...viewport }
+  }
+
+  async sendInput(sessionId: string, input: LoginInputDto): Promise<void> {
+    const { page } = this.requireLive(sessionId)
+    switch (input.type) {
+      case 'click':
+        await page.mouse.click(input.x ?? 0, input.y ?? 0)
+        break
+      case 'type':
+        await page.keyboard.type(input.value ?? '')
+        break
+      case 'key':
+        await page.keyboard.press(input.value ?? 'Enter')
+        break
+      case 'scroll':
+        await page.mouse.wheel(0, input.deltaY ?? 0)
+        break
+    }
   }
 
   async cancelSession(sessionId: string): Promise<void> {
     await this.closeSession(sessionId)
   }
 
+  private requireLive(sessionId: string): LoginSession {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new NotFoundException('Session not found or expired')
+    if (Date.now() > session.expiresAt.getTime()) {
+      void this.closeSession(sessionId)
+      throw new NotFoundException('Session expired')
+    }
+    return session
+  }
+
+  private async openQrLogin(page: Page): Promise<void> {
+    await page.goto(QR_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
+    // 等待 JS 渲染
+    await page.waitForTimeout(2_000)
+    // 如果当前页面没有 qrcode 路径，尝试点击二维码登录 tab
+    if (!page.url().includes('qrcode')) {
+      const qrTab = await page.$('[data-e2e="qrcode-tab"], [class*="qrcode-tab"], div:has-text("使用二维码登录"), button:has-text("QR code")')
+      if (qrTab) {
+        await qrTab.click()
+        await page.waitForTimeout(1_500)
+      }
+    }
+  }
+
   /**
-   * 扫码被拒时页面上只显示一句"请换个方式登录"，真实原因在 passport 接口的
-   * error_code / description 里。轮询接口每秒都调，按 status 去重避免刷屏。
+   * 自动填表只是省去手打，任何一步对不上都直接放手让用户在远程画面里自己操作——
+   * 这比抛错强，因为 TikTok 改版时前者还能用，后者直接不可用。
    */
-  private logPassportResponses(page: Page): void {
-    // 页面每轮会并发发三次同样的轮询（TikTok 自己的重试），只留状态变化那一条
+  private async openPasswordLogin(session: LoginSession, dto: StartLoginSessionDto): Promise<void> {
+    const { page } = session
+    await page.goto(PASSWORD_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
+    await page.waitForTimeout(2_000)
+
+    if (!dto.identifier || !dto.password) return
+
+    const identifierInput = await page
+      .waitForSelector('input[name="username"], input[type="text"]', { timeout: 15_000 })
+      .catch(() => null)
+    const passwordInput = await page.$('input[type="password"]')
+    if (!identifierInput || !passwordInput) {
+      this.logger.warn(`[${session.id}] 登录表单未识别，转由用户手动操作`)
+      return
+    }
+
+    await identifierInput.fill(dto.identifier)
+    await passwordInput.fill(dto.password)
+    await page.waitForTimeout(500)
+    await page
+      .click('button[type="submit"], [data-e2e="login-button"]', { timeout: 5_000 })
+      .catch(() => this.logger.warn(`[${session.id}] 登录按钮不可点，转由用户手动操作`))
+  }
+
+  /**
+   * 页面上只显示一句笼统的提示，真实原因在 passport 接口的 description 里。
+   * 页面每轮会并发发三次同样的轮询（TikTok 自己的重试），只留状态变化那一条。
+   */
+  private watchPassportResponses(session: LoginSession): void {
     const seen = new Map<string, number>()
-    page.on('response', (res) => {
+    session.page.on('response', (res) => {
       const url = res.url()
       if (!url.includes('/passport/web/')) return
-      const u = new URL(url)
-      const sig = ['msToken', 'X-Bogus', '_signature', 'verifyFp']
-        .map((k) => `${k}=${(u.searchParams.get(k) ?? 'MISSING').slice(0, 6)}`)
-        .join(' ')
+      const path = new URL(url).pathname
       void res
         .json()
         .then((body: any) => {
           const status = body?.data?.status ?? ''
           const code = body?.error_code ?? body?.data?.error_code
           const desc = body?.description ?? body?.data?.description ?? ''
-          const key = `${u.pathname}|${status}|${code}|${desc}`
+          if (desc && path.includes('/user/login')) session.lastError = desc
+
+          const key = `${path}|${status}|${code}|${desc}`
           const now = Date.now()
           if (now - (seen.get(key) ?? 0) < 15_000) return
           seen.set(key, now)
           this.logger.log(
-            `passport ${u.pathname} http=${res.status()} ${sig} -> status=${status} code=${code} desc=${desc} msg=${body?.message ?? ''}`,
+            `[${session.id}] passport ${path} -> status=${status} code=${code} desc=${desc} msg=${body?.message ?? ''}`,
           )
         })
         .catch(() => {})
@@ -169,7 +263,6 @@ export class TiktokLoginService {
       })
 
       if (dataUrl) {
-        this.logger.log(`[${sessionId}] QR extracted from DOM`)
         return dataUrl.replace(/^data:image\/\w+;base64,/, '')
       }
 
@@ -179,7 +272,6 @@ export class TiktokLoginService {
         const isVisible = await el.isVisible()
         if (isVisible) {
           const buf = await el.screenshot({ type: 'png' })
-          this.logger.log(`[${sessionId}] QR element screenshot ok`)
           return buf.toString('base64')
         }
       }
@@ -192,7 +284,6 @@ export class TiktokLoginService {
 
       if (found) {
         const buf = await found.screenshot({ type: 'png' })
-        this.logger.log(`[${sessionId}] QR waited + screenshot ok`)
         return buf.toString('base64')
       }
     } catch (err) {
@@ -229,7 +320,7 @@ export class TiktokLoginService {
       session.avatar = profile?.avatar
       session.status = 'success'
 
-      this.logger.log(`TikTok QR login success: @${session.username}`)
+      this.logger.log(`TikTok login success (${session.mode}): @${session.username}`)
 
       // 成功后关闭页面（保留 context 以防需要再次截图）
       await session.page.close().catch(() => {})
@@ -260,8 +351,8 @@ export class TiktokLoginService {
   private async closeSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
     if (!session) return
-    await session.context.close().catch(() => {})
     this.sessions.delete(sessionId)
+    await session.context.close().catch(() => {})
   }
 
   private cleanExpired(): void {
