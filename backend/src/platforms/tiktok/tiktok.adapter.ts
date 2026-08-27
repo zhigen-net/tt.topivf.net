@@ -114,20 +114,25 @@ export class TiktokAdapter extends PlatformAdapter {
       )
       const stats = await page.evaluate(() => {
         const d = (window as any).__UNIVERSAL_DATA__
-        const user =
-          d?.['webapp.user-detail']?.userInfo?.user ||
-          d?.['webapp.user-page']?.userInfo?.user
-        if (!user) return null
-        return {
-          followers: user.followerCount ?? 0,
-          following: user.followingCount ?? 0,
-          postsCount: user.videoCount ?? 0,
+        if (!d) return null
+        // 遍历所有顶层 key 找 userInfo
+        for (const key of Object.keys(d)) {
+          const user = d[key]?.userInfo?.user
+          if (user && typeof user.followerCount === 'number') {
+            return {
+              followers: user.followerCount,
+              following: user.followingCount ?? 0,
+              postsCount: user.videoCount ?? 0,
+            }
+          }
         }
+        return null
       })
       if (stats) {
         this.logger.log(`fetchStats browser ok for @${account.username}: ${stats.followers} followers`)
         return stats
       }
+      this.logger.warn(`fetchStats: no user data in __UNIVERSAL_DATA__ for @${account.username}`)
     } catch (err) {
       this.logger.warn(`fetchStats browser failed for @${account.username}: ${err}`)
     } finally {
