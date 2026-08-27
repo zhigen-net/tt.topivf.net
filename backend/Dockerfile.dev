@@ -12,12 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxss1 libxtst6 libxkbcommon0 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
+# Skip browser download during pnpm install; we install it manually below
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --ignore-scripts --config.confirmModulesPurge=false
+RUN pnpm install --frozen-lockfile --config.confirmModulesPurge=false
 
-# Install Playwright Chromium binary
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Download Chromium binary to a fixed path inside the image
 RUN npx playwright install chromium
 
 COPY . .

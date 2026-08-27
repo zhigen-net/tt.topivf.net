@@ -80,7 +80,8 @@
       "@scarf/scarf",
       "msgpackr-extract",
       "unrs-resolver",
-      "bcryptjs"
+      "bcryptjs",
+      "playwright"
     ]
   },
   "jest": {
