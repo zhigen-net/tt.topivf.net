@@ -48,7 +48,17 @@ export class TiktokLoginService {
     const page = await context.newPage()
 
     try {
-      await page.goto(QR_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.goto(QR_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
+      // 等待 JS 渲染
+      await page.waitForTimeout(2_000)
+      // 如果当前页面没有 qr-code 路径，尝试点击二维码登录 tab
+      if (!page.url().includes('qr-code')) {
+        const qrTab = await page.$('[data-e2e="qrcode-tab"], [class*="qrcode-tab"], button:has-text("QR code"), button:has-text("二维码")')
+        if (qrTab) {
+          await qrTab.click()
+          await page.waitForTimeout(1_500)
+        }
+      }
     } catch (e) {
       await context.close()
       throw new Error(`无法打开 TikTok 登录页: ${e}`)
@@ -122,43 +132,55 @@ export class TiktokLoginService {
 
   private async captureQrCode(page: Page, sessionId: string): Promise<string> {
     try {
-      // 等待二维码容器出现
-      await page.waitForSelector(
-        'canvas, [class*="qrcode"] img, [class*="qr-code"] img, img[alt*="QR"], img[alt*="qr"]',
-        { timeout: 15_000 },
-      )
-
       // 优先从 img src 拿 data URL（避免二次截图失真）
       const dataUrl = await page.evaluate(() => {
         const img = document.querySelector<HTMLImageElement>(
           '[class*="qrcode"] img, [class*="qr-code"] img, img[alt*="QR"], img[alt*="qr"]',
         )
         if (img?.src?.startsWith('data:')) return img.src
+        // canvas 转 data URL
+        const canvas = document.querySelector<HTMLCanvasElement>('[class*="qrcode"] canvas, [class*="qr-code"] canvas, canvas')
+        if (canvas) {
+          try { return canvas.toDataURL('image/png') } catch { /* tainted */ }
+        }
         return null
       })
 
       if (dataUrl) {
+        this.logger.log(`[${sessionId}] QR extracted from DOM`)
         return dataUrl.replace(/^data:image\/\w+;base64,/, '')
       }
 
-      // 截图二维码区域
-      const el = await page.$(
-        'canvas, [class*="qrcode"], [class*="qr-code"], [data-e2e*="qr"]',
-      )
+      // 尝试截图元素
+      const el = await page.$('[class*="qrcode"], [class*="qr-code"], [data-e2e*="qr"], canvas')
       if (el) {
-        const buf = await el.screenshot({ type: 'png' })
-        return buf.toString('base64')
+        const isVisible = await el.isVisible()
+        if (isVisible) {
+          const buf = await el.screenshot({ type: 'png' })
+          this.logger.log(`[${sessionId}] QR element screenshot ok`)
+          return buf.toString('base64')
+        }
       }
 
-      // 兜底：截整个页面（裁中间区域）
-      const buf = await page.screenshot({ type: 'png', clip: { x: 340, y: 100, width: 600, height: 500 } })
-      return buf.toString('base64')
+      // 如果有 waitForSelector 等待成功再截图，否则截整页
+      const found = await page.waitForSelector(
+        'canvas, [class*="qrcode"], [class*="qr-code"], [data-e2e*="qr"]',
+        { timeout: 10_000 },
+      ).catch(() => null)
+
+      if (found) {
+        const buf = await found.screenshot({ type: 'png' })
+        this.logger.log(`[${sessionId}] QR waited + screenshot ok`)
+        return buf.toString('base64')
+      }
     } catch (err) {
       this.logger.warn(`[${sessionId}] QR 截图失败: ${err}`)
-      // 截整页作为兜底
-      const buf = await page.screenshot({ type: 'png' })
-      return buf.toString('base64')
     }
+
+    // 兜底：截整页
+    this.logger.warn(`[${sessionId}] 回退到整页截图`)
+    const buf = await page.screenshot({ type: 'png', fullPage: false })
+    return buf.toString('base64')
   }
 
   private async checkLoginSuccess(page: Page): Promise<boolean> {
