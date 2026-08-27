@@ -110,29 +110,36 @@ export class TiktokAdapter extends PlatformAdapter {
     try {
       await page.goto(
         `https://www.tiktok.com/@${encodeURIComponent(account.username)}`,
-        { waitUntil: 'domcontentloaded', timeout: 30_000 },
+        { waitUntil: 'load', timeout: 30_000 },
       )
+      // 等待 SSR 数据注入 window
+      await page.waitForTimeout(2_000)
+
       const stats = await page.evaluate(() => {
         const d = (window as any).__UNIVERSAL_DATA__
-        if (!d) return null
-        // 遍历所有顶层 key 找 userInfo
-        for (const key of Object.keys(d)) {
+        if (!d) return { _keys: [], user: null }
+        const keys = Object.keys(d)
+        for (const key of keys) {
           const user = d[key]?.userInfo?.user
           if (user && typeof user.followerCount === 'number') {
             return {
-              followers: user.followerCount,
-              following: user.followingCount ?? 0,
-              postsCount: user.videoCount ?? 0,
+              _keys: keys,
+              user: {
+                followers: user.followerCount,
+                following: user.followingCount ?? 0,
+                postsCount: user.videoCount ?? 0,
+              },
             }
           }
         }
-        return null
+        return { _keys: keys, user: null }
       })
-      if (stats) {
-        this.logger.log(`fetchStats browser ok for @${account.username}: ${stats.followers} followers`)
-        return stats
+
+      if (stats.user) {
+        this.logger.log(`fetchStats browser ok for @${account.username}: ${stats.user.followers} followers`)
+        return stats.user
       }
-      this.logger.warn(`fetchStats: no user data in __UNIVERSAL_DATA__ for @${account.username}`)
+      this.logger.warn(`fetchStats: no userInfo in __UNIVERSAL_DATA__ keys=[${(stats._keys ?? []).join(',')}] for @${account.username}`)
     } catch (err) {
       this.logger.warn(`fetchStats browser failed for @${account.username}: ${err}`)
     } finally {
