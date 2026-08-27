@@ -125,6 +125,8 @@ export class TiktokLoginService {
    * error_code / description 里。轮询接口每秒都调，按 status 去重避免刷屏。
    */
   private logPassportResponses(page: Page): void {
+    // 页面每轮会并发发三次同样的轮询（TikTok 自己的重试），只留状态变化那一条
+    const seen = new Map<string, number>()
     page.on('response', (res) => {
       const url = res.url()
       if (!url.includes('/passport/web/')) return
@@ -135,12 +137,15 @@ export class TiktokLoginService {
       void res
         .json()
         .then((body: any) => {
+          const status = body?.data?.status ?? ''
+          const code = body?.error_code ?? body?.data?.error_code
+          const desc = body?.description ?? body?.data?.description ?? ''
+          const key = `${u.pathname}|${status}|${code}|${desc}`
+          const now = Date.now()
+          if (now - (seen.get(key) ?? 0) < 15_000) return
+          seen.set(key, now)
           this.logger.log(
-            `passport ${u.pathname} http=${res.status()} ${sig} -> status=${
-              body?.data?.status ?? ''
-            } code=${body?.error_code ?? body?.data?.error_code} desc=${
-              body?.description ?? body?.data?.description ?? ''
-            } msg=${body?.message ?? ''}`,
+            `passport ${u.pathname} http=${res.status()} ${sig} -> status=${status} code=${code} desc=${desc} msg=${body?.message ?? ''}`,
           )
         })
         .catch(() => {})
