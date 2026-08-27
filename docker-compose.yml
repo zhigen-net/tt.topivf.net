@@ -43,6 +43,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: sh_api
     restart: unless-stopped
+    shm_size: '1gb'
     volumes:
       - ./backend:/app
       - /app/node_modules

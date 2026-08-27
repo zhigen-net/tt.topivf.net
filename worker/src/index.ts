@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { Worker, Queue } from 'bullmq'
+import { Worker } from 'bullmq'
 
 const connection = {
   host: process.env.REDIS_HOST ?? 'redis',
@@ -7,29 +7,19 @@ const connection = {
   password: process.env.REDIS_PASSWORD,
 }
 
-const publishWorker = new Worker(
-  'publish',
-  async (job) => {
-    console.log(`[Worker] Processing job ${job.id} — taskId: ${job.data.taskId}`)
-    // Platform-specific publish logic will be added per adapter
-    // This worker is the execution layer, separated from the API
-    await new Promise((r) => setTimeout(r, 1000))
-    console.log(`[Worker] Job ${job.id} done`)
-  },
-  { connection, concurrency: 5 },
-)
-
+// 统计数据采集队列（轻量级，不涉及浏览器）
+// publish 队列由 NestJS api 服务中的 TasksProcessor (@nestjs/bullmq) 处理
 const statsWorker = new Worker(
   'stats-collect',
   async (job) => {
     console.log(`[Worker] Collecting stats for accountId: ${job.data.accountId}`)
-    // Fetch stats from platform and store snapshot
+    // TODO: 从平台 API 拉取最新粉丝数写回 DB
   },
   { connection, concurrency: 10 },
 )
 
-publishWorker.on('failed', (job, err) => {
-  console.error(`[Worker] Publish job ${job?.id} failed:`, err.message)
+statsWorker.on('failed', (job, err) => {
+  console.error(`[Worker] Stats job ${job?.id} failed:`, err.message)
 })
 
-console.log('[SocialHub Worker] Started — listening for publish & stats-collect queues')
+console.log('[SocialHub Worker] Started — listening for stats-collect queue')

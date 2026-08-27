@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
+import { BrowserManager } from '../browser-manager.service'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
 
@@ -7,6 +8,10 @@ import type { Content } from '../../contents/content.entity'
 export class YoutubeAdapter extends PlatformAdapter {
   readonly platform = 'youtube'
   private readonly logger = new Logger(YoutubeAdapter.name)
+
+  constructor(private readonly browserManager: BrowserManager) {
+    super()
+  }
 
   async publish(account: Account, content: Content): Promise<PostResult> {
     this.logger.log(`Publishing to YouTube for @${account.username}`)
