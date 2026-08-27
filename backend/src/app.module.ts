@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module'
 import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
 import { DashboardModule } from './dashboard/dashboard.module'
+import { PlatformsModule } from './platforms/platforms.module'
 import appConfig from './config/app.config'
 
 @Module({
@@ -41,6 +42,7 @@ import appConfig from './config/app.config'
       }),
     }),
 
+    PlatformsModule,
     AuthModule,
     AccountsModule,
     ContentsModule,
