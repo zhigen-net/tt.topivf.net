@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
 import { BrowserManager } from '../browser-manager.service'
+import { fetchLoggedInUsername } from './tiktok-login.service'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
 
@@ -112,36 +113,24 @@ export class TiktokAdapter extends PlatformAdapter {
         `https://www.tiktok.com/@${encodeURIComponent(account.username)}`,
         { waitUntil: 'load', timeout: 30_000 },
       )
-      // 等待 SSR 数据注入 window
-      await page.waitForTimeout(2_000)
+      const raw = await page
+        .locator('#__UNIVERSAL_DATA_FOR_REHYDRATION__')
+        .textContent({ timeout: 10_000 })
+        .catch(() => null)
 
-      const stats = await page.evaluate(() => {
-        const d = (window as any).__UNIVERSAL_DATA__
-        if (!d) return { _keys: [], user: null }
-        const keys = Object.keys(d)
-        for (const key of keys) {
-          const user = d[key]?.userInfo?.user
-          if (user && typeof user.followerCount === 'number') {
-            return {
-              _keys: keys,
-              user: {
-                followers: user.followerCount,
-                following: user.followingCount ?? 0,
-                postsCount: user.videoCount ?? 0,
-              },
-            }
-          }
+      const s = raw
+        ? JSON.parse(raw)?.__DEFAULT_SCOPE__?.['webapp.user-detail']?.userInfo?.stats
+        : null
+
+      if (s && typeof s.followerCount === 'number') {
+        this.logger.log(`fetchStats ok for @${account.username}: ${s.followerCount} followers`)
+        return {
+          followers: s.followerCount,
+          following: s.followingCount ?? 0,
+          postsCount: s.videoCount ?? 0,
         }
-        return { _keys: keys, user: null }
-      })
-
-      if (stats.user) {
-        this.logger.log(`fetchStats browser ok for @${account.username}: ${stats.user.followers} followers`)
-        return stats.user
       }
-      this.logger.warn(`fetchStats: no userInfo in __UNIVERSAL_DATA__ keys=[${(stats._keys ?? []).join(',')}] for @${account.username}`)
-      // 截图调试，查看 TikTok 实际渲染内容
-      await page.screenshot({ path: `/tmp/tiktok-fetchstats-${account.id}.png` }).catch(() => {})
+      this.logger.warn(`fetchStats: no user-detail stats for @${account.username}`)
     } catch (err) {
       this.logger.warn(`fetchStats browser failed for @${account.username}: ${err}`)
     } finally {
@@ -157,15 +146,11 @@ export class TiktokAdapter extends PlatformAdapter {
   async checkHealth(account: Account): Promise<boolean> {
     if (!account.sessionData?.cookies) return false
     const context = await this.browserManager.getContext(account)
-    const page = await context.newPage()
     try {
-      await page.goto('https://www.tiktok.com/foryou', { waitUntil: 'domcontentloaded', timeout: 20_000 })
-      const url = page.url()
-      return !url.includes('/login')
-    } catch {
+      return (await fetchLoggedInUsername(context)) !== null
+    } catch (err) {
+      this.logger.warn(`checkHealth failed for @${account.username}: ${err}`)
       return false
-    } finally {
-      await page.close()
     }
   }
 

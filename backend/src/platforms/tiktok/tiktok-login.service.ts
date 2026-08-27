@@ -20,7 +20,7 @@ export interface LoginSession {
 }
 
 const SESSION_TTL_MS = 5 * 60 * 1000  // 5 分钟
-const QR_LOGIN_URL = 'https://www.tiktok.com/login/phone-or-email/qr-code'
+const QR_LOGIN_URL = 'https://www.tiktok.com/login/qrcode'
 
 @Injectable()
 export class TiktokLoginService {
@@ -51,9 +51,9 @@ export class TiktokLoginService {
       await page.goto(QR_LOGIN_URL, { waitUntil: 'load', timeout: 30_000 })
       // 等待 JS 渲染
       await page.waitForTimeout(2_000)
-      // 如果当前页面没有 qr-code 路径，尝试点击二维码登录 tab
-      if (!page.url().includes('qr-code')) {
-        const qrTab = await page.$('[data-e2e="qrcode-tab"], [class*="qrcode-tab"], button:has-text("QR code"), button:has-text("二维码")')
+      // 如果当前页面没有 qrcode 路径，尝试点击二维码登录 tab
+      if (!page.url().includes('qrcode')) {
+        const qrTab = await page.$('[data-e2e="qrcode-tab"], [class*="qrcode-tab"], div:has-text("使用二维码登录"), button:has-text("QR code")')
         if (qrTab) {
           await qrTab.click()
           await page.waitForTimeout(1_500)
@@ -109,7 +109,7 @@ export class TiktokLoginService {
     }
 
     // 检测是否已登录
-    const loggedIn = await this.checkLoginSuccess(session.page)
+    const loggedIn = await this.checkLoginSuccess(session.context)
     if (loggedIn) {
       await this.captureSessionData(session)
       return {
@@ -183,16 +183,11 @@ export class TiktokLoginService {
     return buf.toString('base64')
   }
 
-  private async checkLoginSuccess(page: Page): Promise<boolean> {
+  /** sessionid cookie 是 TikTok 登录态的唯一权威标志，URL 跳转不可靠（登录页也会重定向到 /404） */
+  private async checkLoginSuccess(context: BrowserContext): Promise<boolean> {
     try {
-      const url = page.url()
-      // 扫码成功后会跳转离开登录页
-      if (!url.includes('/login') && !url.includes('/qr-code')) {
-        return true
-      }
-      // 或者检测页面上是否出现了用户头像元素
-      const avatar = await page.$('[data-e2e="user-avatar"], [class*="avatar-wrapper"]')
-      return !!avatar
+      const cookies = await context.cookies()
+      return cookies.some((c) => c.name === 'sessionid' && c.value.length > 0)
     } catch {
       return false
     }
@@ -203,38 +198,13 @@ export class TiktokLoginService {
       const rawCookies = await session.context.cookies()
       session.cookies = JSON.stringify(rawCookies)
 
-      // 尝试从页面提取用户信息
-      await session.page.goto('https://www.tiktok.com/', { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+      const username = await fetchLoggedInUsername(session.context)
+      if (!username) throw new Error('登录成功但无法识别用户名')
 
-      const info = await session.page.evaluate(() => {
-        // TikTok 在 window 上注入全局数据
-        const data = (window as any).__UNIVERSAL_DATA__ || (window as any).__INIT_PROPS__
-        try {
-          const userDetail =
-            data?.['webapp.user-detail']?.userInfo?.user ||
-            data?.userInfo?.user
-          if (userDetail) {
-            return {
-              username: userDetail.uniqueId,
-              displayName: userDetail.nickname,
-              avatar: userDetail.avatarThumb || userDetail.avatarMedium,
-            }
-          }
-        } catch {}
-
-        // 降级：从 DOM 找
-        const usernameEl = document.querySelector('[data-e2e="user-name"], [class*="username"]')
-        const avatarEl = document.querySelector<HTMLImageElement>('[data-e2e="user-avatar"] img, [class*="avatar"] img')
-        return {
-          username: usernameEl?.textContent?.replace('@', '').trim() || undefined,
-          displayName: usernameEl?.textContent?.trim() || undefined,
-          avatar: avatarEl?.src || undefined,
-        }
-      })
-
-      session.username = info?.username
-      session.displayName = info?.displayName || info?.username
-      session.avatar = info?.avatar
+      const profile = await this.fetchProfile(session.page, username)
+      session.username = username
+      session.displayName = profile?.nickname || username
+      session.avatar = profile?.avatar
       session.status = 'success'
 
       this.logger.log(`TikTok QR login success: @${session.username}`)
@@ -246,6 +216,22 @@ export class TiktokLoginService {
     } catch (err) {
       this.logger.error(`Failed to capture session data: ${err}`)
       session.status = 'failed'
+    }
+  }
+
+  private async fetchProfile(page: Page, username: string) {
+    try {
+      await page.goto(`https://www.tiktok.com/@${encodeURIComponent(username)}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20_000,
+      })
+      const raw = await page.locator('#__UNIVERSAL_DATA_FOR_REHYDRATION__').textContent({ timeout: 10_000 })
+      const user = raw ? JSON.parse(raw)?.__DEFAULT_SCOPE__?.['webapp.user-detail']?.userInfo?.user : null
+      if (!user) return null
+      return { nickname: user.nickname as string, avatar: (user.avatarMedium || user.avatarThumb) as string }
+    } catch (err) {
+      this.logger.warn(`无法获取 @${username} 的资料: ${err}`)
+      return null
     }
   }
 
@@ -264,4 +250,16 @@ export class TiktokLoginService {
       }
     }
   }
+}
+
+const PASSPORT_INFO_URL =
+  'https://www.tiktok.com/passport/web/account/info/?aid=1459&app_name=tiktok_web'
+
+/** 返回当前 context 登录账号的用户名，未登录返回 null */
+export async function fetchLoggedInUsername(context: BrowserContext): Promise<string | null> {
+  const res = await context.request.get(PASSPORT_INFO_URL, { timeout: 15_000 })
+  if (!res.ok()) return null
+  const body = await res.json()
+  if (body?.message !== 'success') return null
+  return body?.data?.username ?? null
 }
