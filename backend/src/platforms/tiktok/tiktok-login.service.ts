@@ -129,12 +129,14 @@ export class TiktokLoginService {
       const url = res.url()
       if (!url.includes('/passport/web/')) return
       const u = new URL(url)
-      const token = (u.searchParams.get('token') ?? '').slice(0, 8)
+      const sig = ['msToken', 'X-Bogus', '_signature', 'verifyFp']
+        .map((k) => `${k}=${(u.searchParams.get(k) ?? 'MISSING').slice(0, 6)}`)
+        .join(' ')
       void res
         .json()
         .then((body: any) => {
           this.logger.log(
-            `passport ${u.pathname} token=${token} -> status=${
+            `passport ${u.pathname} http=${res.status()} ${sig} -> status=${
               body?.data?.status ?? ''
             } code=${body?.error_code ?? body?.data?.error_code} desc=${
               body?.description ?? body?.data?.description ?? ''
