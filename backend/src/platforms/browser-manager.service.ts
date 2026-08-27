@@ -2,19 +2,10 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common'
 import { chromium, Browser, BrowserContext } from 'playwright'
 import type { Account } from '../accounts/account.entity'
 import type { Proxy } from '../proxies/proxy.entity'
+import { buildContextOptions, spoofInitScript, SPOOF_CONFIG } from './fingerprint'
 
-/**
- * 登录与登录后操作必须共用同一套指纹：两者不一致本身就是风控信号。
- * 时区需与出口 IP 的地理位置一致，否则 TikTok 的 secsdk 会判定为异常。
- * 不覆盖 userAgent —— 有头模式下 Chromium 上报真实 UA，手工伪造反而会
- * 与 navigator.userAgentData 上报的真实版本对不上。
- */
-export const BROWSER_FINGERPRINT = {
-  viewport: { width: 1280, height: 800 },
-  locale: 'zh-CN',
-  timezoneId: process.env.BROWSER_TIMEZONE ?? 'America/Los_Angeles',
-  extraHTTPHeaders: { 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' },
-}
+/** 时区必须与出口 IP 的地理位置一致，配代理时需同步调整 */
+const TIMEZONE = process.env.BROWSER_TIMEZONE ?? 'America/Los_Angeles'
 
 @Injectable()
 export class BrowserManager implements OnModuleDestroy {
@@ -41,14 +32,22 @@ export class BrowserManager implements OnModuleDestroy {
     return this.browser
   }
 
+  /** 登录与登录后操作共用：两者指纹不一致本身就是风控信号 */
+  async newStealthContext(extra: { proxy?: ReturnType<typeof buildProxyConfig> } = {}): Promise<BrowserContext> {
+    const browser = await this.getBrowser()
+    const context = await browser.newContext({
+      ...buildContextOptions(browser.version(), TIMEZONE),
+      ...extra,
+    })
+    await context.addInitScript(spoofInitScript(SPOOF_CONFIG))
+    return context
+  }
+
   async getContext(account: Account): Promise<BrowserContext> {
     const existing = this.contexts.get(account.id)
     if (existing) return existing
 
-    const browser = await this.getBrowser()
-
-    const context = await browser.newContext({
-      ...BROWSER_FINGERPRINT,
+    const context = await this.newStealthContext({
       proxy: account.proxy ? buildProxyConfig(account.proxy) : undefined,
     })
 
