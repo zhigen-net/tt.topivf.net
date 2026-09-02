@@ -170,9 +170,10 @@ function toPayload(form: FormState) {
   return {
     title: form.title.trim(),
     type: form.type,
-    fileUrl: form.fileUrl.trim() || undefined,
-    thumbnailUrl: form.thumbnailUrl.trim() || undefined,
-    caption: form.caption.trim() || undefined,
+    // 清空要传 null，传 undefined 会被 JSON 直接丢掉，编辑时改动就静默失效了
+    fileUrl: form.fileUrl.trim() || null,
+    thumbnailUrl: form.thumbnailUrl.trim() || null,
+    caption: form.caption.trim() || null,
     hashtags: form.hashtags.split(/[\s,]+/).filter(Boolean).map((h) => h.replace(/^#/, '')),
     platforms: form.platforms,
   }

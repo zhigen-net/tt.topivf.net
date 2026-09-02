@@ -57,12 +57,12 @@ export class ContentsService {
   }
 
   async create(dto: CreateContentDto) {
-    return this.repo.save(this.repo.create({ ...dto, hashtags: dto.hashtags ?? [] }))
+    return this.repo.save(this.repo.create({ ...toEntity(dto), hashtags: dto.hashtags ?? [] }))
   }
 
   async update(id: string, dto: UpdateContentDto) {
     await this.findOne(id)
-    await this.repo.update(id, dto)
+    await this.repo.update(id, toEntity(dto))
     return this.findOne(id)
   }
 
@@ -107,4 +107,12 @@ export class ContentsService {
 
 function emptySummary(): PublishSummary {
   return { taskCount: 0, doneCount: 0, failedCount: 0, lastPublishedAt: null }
+}
+
+/**
+ * DTO 允许用 null 表示「把这个字段清空」，实体类型里却只有 string | undefined。
+ * 在可空列上两者是同一件事，差异只存在于类型层面。
+ */
+function toEntity(dto: CreateContentDto | UpdateContentDto): Partial<Content> {
+  return dto as Partial<Content>
 }

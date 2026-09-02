@@ -21,21 +21,22 @@ export class CreateContentDto {
   @IsEnum(CONTENT_TYPES)
   type: ContentType
 
-  @ApiPropertyOptional()
+  // 这三个字段传 null 表示「清空」，@IsOptional 对 null 会跳过校验
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsUrl(URL_RULES)
-  fileUrl?: string
+  fileUrl?: string | null
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsUrl(URL_RULES)
-  thumbnailUrl?: string
+  thumbnailUrl?: string | null
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(5000)
-  caption?: string
+  caption?: string | null
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
