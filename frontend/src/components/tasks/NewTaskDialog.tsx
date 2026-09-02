@@ -18,15 +18,14 @@ export function NewTaskDialog({ open, onClose }: Props) {
   const qc = useQueryClient()
   const [contentId, setContentId] = useState('')
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
-  const [scheduledAt, setScheduledAt] = useState(() => {
-    const d = new Date()
-    d.setMinutes(d.getMinutes() + 10)
-    return d.toISOString().slice(0, 16)
-  })
+  const [scheduledAt, setScheduledAt] = useState(defaultSchedule)
 
+  // 只有审核通过的作品能建任务，其它列出来只会在提交时被后端打回
   const { data: contentsData } = useQuery({
-    queryKey: ['contents'],
-    queryFn: () => api.get<{ data: Content[] }>('/contents').then((r) => r.data),
+    queryKey: ['contents', { reviewStatus: 'approved' }],
+    queryFn: () => api.get<{ data: Content[] }>('/contents', {
+      params: { reviewStatus: 'approved', limit: 200 },
+    }).then((r) => r.data),
     enabled: open,
   })
 
@@ -68,9 +67,7 @@ export function NewTaskDialog({ open, onClose }: Props) {
   function handleClose() {
     setContentId('')
     setSelectedAccounts([])
-    const d = new Date()
-    d.setMinutes(d.getMinutes() + 10)
-    setScheduledAt(d.toISOString().slice(0, 16))
+    setScheduledAt(defaultSchedule())
     onClose()
   }
 
@@ -96,7 +93,7 @@ export function NewTaskDialog({ open, onClose }: Props) {
               </SelectTrigger>
               <SelectContent>
                 {contents.length === 0 ? (
-                  <SelectItem value="_empty" disabled>还没有作品</SelectItem>
+                  <SelectItem value="_empty" disabled>没有审核通过的作品</SelectItem>
                 ) : (
                   contents.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
@@ -145,4 +142,12 @@ export function NewTaskDialog({ open, onClose }: Props) {
       </DialogContent>
     </Dialog>
   )
+}
+
+function defaultSchedule(): string {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() + 10)
+  // datetime-local 要本地时间，toISOString 会偏移成 UTC
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
 }

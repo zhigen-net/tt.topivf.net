@@ -2,6 +2,18 @@ export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'faceboo
 export type AccountStatus = 'active' | 'inactive' | 'banned' | 'warming'
 export type TaskStatus = 'pending' | 'running' | 'done' | 'failed'
 export type ContentType = 'video' | 'image' | 'reel' | 'story'
+export type ReviewStatus = 'draft' | 'pending' | 'approved' | 'rejected'
+export type UserRole = 'admin' | 'user'
+
+export interface User {
+  id: string
+  username: string
+  displayName: string
+  role: UserRole
+  isActive: boolean
+  lastLoginAt?: string
+  createdAt: string
+}
 
 export interface Account {
   id: string
@@ -50,6 +62,12 @@ export interface Content {
   platforms: Platform[]
   size?: number
   duration?: number
+  reviewStatus: ReviewStatus
+  reviewNote?: string
+  reviewedAt?: string
+  reviewedBy?: string
+  createdById?: string
+  createdBy?: string
   createdAt: string
   updatedAt: string
   taskCount: number

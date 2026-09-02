@@ -56,7 +56,7 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
   )
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (): Promise<unknown> => {
       const at = immediate ? new Date().toISOString() : new Date(scheduledAt).toISOString()
       if (contents.length === 1) {
         const picked = candidates.filter((a) => selected.includes(a.id) && contents[0].platforms.includes(a.platform))

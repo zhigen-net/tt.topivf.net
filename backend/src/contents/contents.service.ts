@@ -1,12 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
+import { In, Repository } from 'typeorm'
 import { Content } from './content.entity'
 import { PublishTask } from '../tasks/publish-task.entity'
 import { CreateContentDto } from './dto/create-content.dto'
 import { UpdateContentDto } from './dto/update-content.dto'
 import { QueryContentsDto } from './dto/query-contents.dto'
+import type { ReviewAction } from './dto/review-content.dto'
 import type { Platform } from '../accounts/account.entity'
+import type { User } from '../users/user.entity'
 
 export interface PublishSummary {
   taskCount: number
@@ -25,7 +27,7 @@ export class ContentsService {
   ) {}
 
   async findAll(query: QueryContentsDto) {
-    const { search, type, platform, sort = 'createdAt', order = 'DESC', page = 1, limit = 20 } = query
+    const { search, type, platform, reviewStatus, sort = 'createdAt', order = 'DESC', page = 1, limit = 20 } = query
 
     const qb = this.repo.createQueryBuilder('c')
     if (search) {
@@ -33,6 +35,7 @@ export class ContentsService {
     }
     if (type) qb.andWhere('c.type = :type', { type })
     if (platform) qb.andWhere(':platform = ANY(c.platforms)', { platform })
+    if (reviewStatus) qb.andWhere('c.reviewStatus = :reviewStatus', { reviewStatus })
 
     const [data, total] = await qb
       .orderBy(`c.${sort}`, order)
@@ -57,29 +60,104 @@ export class ContentsService {
     return item
   }
 
-  async create(dto: CreateContentDto) {
-    return this.repo.save(this.repo.create({ ...toEntity(dto), hashtags: dto.hashtags ?? [] }))
+  async create(dto: CreateContentDto, actor: User) {
+    return this.repo.save(this.repo.create({
+      ...toEntity(dto),
+      hashtags: dto.hashtags ?? [],
+      reviewStatus: 'draft',
+      createdById: actor.id,
+      createdBy: actor.displayName,
+    }))
   }
 
-  async update(id: string, dto: UpdateContentDto) {
-    await this.findOne(id)
-    await this.repo.update(id, toEntity(dto))
+  async update(id: string, dto: UpdateContentDto, actor: User) {
+    const content = await this.findOne(id)
+    this.assertCanEdit(content, actor)
+    await this.repo.update(id, { ...toEntity(dto), ...resetReview(content) })
     return this.findOne(id)
   }
 
-  async remove(id: string) {
-    await this.findOne(id)
+  async remove(id: string, actor: User) {
+    const content = await this.findOne(id)
+    this.assertCanEdit(content, actor)
     await this.repo.delete(id)
   }
 
-  async bulkRemove(ids: string[]) {
-    const res = await this.repo.delete(ids)
+  async bulkRemove(ids: string[], actor: User) {
+    const items = await this.repo.findBy({ id: In(ids) })
+    for (const c of items) this.assertCanEdit(c, actor)
+    const res = await this.repo.delete(items.map((c) => c.id))
     return { deleted: res.affected ?? 0 }
   }
 
-  async bulkSetPlatforms(ids: string[], platforms: Platform[]) {
-    const res = await this.repo.update(ids, { platforms })
-    return { updated: res.affected ?? 0 }
+  async bulkSetPlatforms(ids: string[], platforms: Platform[], actor: User) {
+    const items = await this.repo.findBy({ id: In(ids) })
+    for (const c of items) this.assertCanEdit(c, actor)
+    let updated = 0
+    for (const c of items) {
+      await this.repo.update(c.id, { platforms, ...resetReview(c) })
+      updated++
+    }
+    return { updated }
+  }
+
+  /** 草稿或被驳回的作品送去审核 */
+  async submit(id: string, actor: User) {
+    const content = await this.findOne(id)
+    this.assertCanEdit(content, actor)
+    if (content.reviewStatus === 'pending') throw new BadRequestException('已经在审核中了')
+    if (content.reviewStatus === 'approved') throw new BadRequestException('已经审核通过，无需重复提交')
+
+    await this.repo.update(id, {
+      reviewStatus: 'pending',
+      ...CLEAR_REVIEW,
+    })
+    return this.findOne(id)
+  }
+
+  async review(id: string, action: ReviewAction, note: string | undefined, actor: User) {
+    const content = await this.findOne(id)
+    if (content.reviewStatus !== 'pending') throw new BadRequestException('只有待审核的作品可以审核')
+    await this.applyReview([content.id], action, note, actor)
+    return this.findOne(id)
+  }
+
+  async bulkSubmit(ids: string[], actor: User) {
+    const items = await this.repo.findBy({ id: In(ids) })
+    const usable = items.filter((c) => c.reviewStatus === 'draft' || c.reviewStatus === 'rejected')
+    for (const c of usable) this.assertCanEdit(c, actor)
+    if (usable.length > 0) {
+      await this.repo.update(usable.map((c) => c.id), {
+        reviewStatus: 'pending',
+        reviewNote: undefined,
+        reviewedAt: undefined,
+        reviewedBy: undefined,
+      })
+    }
+    return { submitted: usable.length, skipped: items.length - usable.length }
+  }
+
+  async bulkReview(ids: string[], action: ReviewAction, note: string | undefined, actor: User) {
+    const items = await this.repo.findBy({ id: In(ids) })
+    const usable = items.filter((c) => c.reviewStatus === 'pending')
+    await this.applyReview(usable.map((c) => c.id), action, note, actor)
+    return { reviewed: usable.length, skipped: items.length - usable.length }
+  }
+
+  private async applyReview(ids: string[], action: ReviewAction, note: string | undefined, actor: User) {
+    if (ids.length === 0) return
+    await this.repo.update(ids, {
+      reviewStatus: action === 'approve' ? 'approved' : 'rejected',
+      reviewNote: action === 'reject' ? note : null,
+      reviewedAt: new Date(),
+      reviewedBy: actor.displayName,
+    } as Partial<Content>)
+  }
+
+  /** 普通用户只能动自己建的作品；没有归属的历史数据只有管理员能动 */
+  private assertCanEdit(content: Content, actor: User) {
+    if (actor.role === 'admin') return
+    if (content.createdById !== actor.id) throw new ForbiddenException('只能操作自己创建的作品')
   }
 
   /** 一次性把整页作品的发布情况聚合出来，避免每张卡片各查一次 */
@@ -115,6 +193,22 @@ export class ContentsService {
     return map
   }
 }
+
+/**
+ * 审核是针对某一版内容的。改过之后原来的结论就不作数了，退回草稿重走流程，
+ * 否则可以先拿一版无害内容过审、再改成别的直接发。
+ */
+function resetReview(content: Content): Partial<Content> {
+  if (content.reviewStatus === 'draft') return {}
+  return { reviewStatus: 'draft', ...CLEAR_REVIEW }
+}
+
+// TypeORM 的 update 会跳过值为 undefined 的字段，要真的清空必须显式给 null
+const CLEAR_REVIEW = {
+  reviewNote: null,
+  reviewedAt: null,
+  reviewedBy: null,
+} as unknown as Partial<Content>
 
 function emptySummary(): PublishSummary {
   return { taskCount: 0, doneCount: 0, failedCount: 0, lastPublishedAt: null }

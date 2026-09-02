@@ -1,7 +1,13 @@
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog'
+import { useMe } from '@/lib/auth'
 
 export default function SettingsPage() {
+  const { me } = useMe()
+  const [passwordOpen, setPasswordOpen] = useState(false)
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -10,6 +16,22 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4 max-w-2xl">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">账号</CardTitle>
+            <CardDescription>当前登录：{me ? `${me.displayName}（@${me.username}）` : '—'}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">登录密码</p>
+                <p className="text-xs text-muted-foreground">定期更换，避免与其它系统共用</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>修改密码</Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Platform Credentials</CardTitle>
@@ -45,6 +67,8 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
   )
 }

@@ -1,7 +1,10 @@
-import { Controller, Post, Body } from '@nestjs/common'
-import { ApiTags } from '@nestjs/swagger'
+import { Controller, Post, Get, Body } from '@nestjs/common'
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthService } from './auth.service'
 import { Public } from './public.decorator'
+import { LoginDto } from './dto/login.dto'
+import { CurrentUser } from './current-user.decorator'
+import type { User } from '../users/user.entity'
 
 @ApiTags('auth')
 @Controller('auth')
@@ -10,7 +13,13 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  login(@Body() body: { username: string; password: string }) {
-    return this.svc.login(body.username, body.password)
+  login(@Body() dto: LoginDto) {
+    return this.svc.login(dto.username, dto.password)
+  }
+
+  @ApiBearerAuth()
+  @Get('me')
+  me(@CurrentUser() user: User) {
+    return user
   }
 }

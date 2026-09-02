@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { In, Repository } from 'typeorm'
 import { InjectQueue } from '@nestjs/bullmq'
@@ -39,6 +39,12 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto) {
+    const content = await this.contents.findOneBy({ id: dto.contentId })
+    if (!content) throw new NotFoundException(`Content ${dto.contentId} not found`)
+    if (content.reviewStatus !== 'approved') {
+      throw new BadRequestException('作品未通过审核，不能发布')
+    }
+
     return this.enqueue({
       contentId: dto.contentId,
       accountIds: dto.accountIds,
@@ -62,6 +68,10 @@ export class TasksService {
     const skipped: { contentId: string; title: string; reason: string }[] = []
 
     for (const content of contents) {
+      if (content.reviewStatus !== 'approved') {
+        skipped.push({ contentId: content.id, title: content.title, reason: '未通过审核' })
+        continue
+      }
       const matched = accounts.filter((a) => content.platforms.includes(a.platform))
       if (matched.length === 0) {
         skipped.push({ contentId: content.id, title: content.title, reason: '没有平台匹配的账号' })

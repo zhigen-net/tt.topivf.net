@@ -6,6 +6,7 @@ import { AccountsModule } from './accounts/accounts.module'
 import { ContentsModule } from './contents/contents.module'
 import { TasksModule } from './tasks/tasks.module'
 import { AuthModule } from './auth/auth.module'
+import { UsersModule } from './users/users.module'
 import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
 import { DashboardModule } from './dashboard/dashboard.module'
@@ -43,6 +44,7 @@ import appConfig from './config/app.config'
     }),
 
     PlatformsModule,
+    UsersModule,
     AuthModule,
     AccountsModule,
     ContentsModule,

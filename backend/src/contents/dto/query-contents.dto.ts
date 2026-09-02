@@ -2,7 +2,8 @@ import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from '
 import { Type } from 'class-transformer'
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { CONTENT_TYPES, PLATFORMS } from './create-content.dto'
-import type { ContentType } from '../content.entity'
+import { REVIEW_STATUSES } from './review-content.dto'
+import type { ContentType, ReviewStatus } from '../content.entity'
 import type { Platform } from '../../accounts/account.entity'
 
 export const SORT_FIELDS = ['createdAt', 'updatedAt', 'title', 'type'] as const
@@ -24,6 +25,11 @@ export class QueryContentsDto {
   @IsOptional()
   @IsEnum(PLATFORMS)
   platform?: Platform
+
+  @ApiPropertyOptional({ enum: REVIEW_STATUSES })
+  @IsOptional()
+  @IsEnum(REVIEW_STATUSES)
+  reviewStatus?: ReviewStatus
 
   // 这个值会拼进 ORDER BY，白名单是唯一挡住注入的东西
   @ApiPropertyOptional({ enum: SORT_FIELDS })

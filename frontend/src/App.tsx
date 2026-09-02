@@ -9,6 +9,8 @@ import TasksPage from '@/pages/tasks/TasksPage'
 import ProxiesPage from '@/pages/proxies/ProxiesPage'
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import UsersPage from '@/pages/users/UsersPage'
+import { useMe } from '@/lib/auth'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,6 +21,12 @@ const queryClient = new QueryClient({
 function RequireAuth() {
   const token = localStorage.getItem('token')
   return token ? <Outlet /> : <Navigate to="/login" replace />
+}
+
+function RequireAdmin() {
+  const { isAdmin, isLoading } = useMe()
+  if (isLoading) return null
+  return isAdmin ? <Outlet /> : <Navigate to="/" replace />
 }
 
 export default function App() {
@@ -36,6 +44,9 @@ export default function App() {
               <Route path="/proxies" element={<ProxiesPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route element={<RequireAdmin />}>
+                <Route path="/users" element={<UsersPage />} />
+              </Route>
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +10,8 @@ import { api } from '@/lib/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [username, setUsername] = useState('admin')
+  const qc = useQueryClient()
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,9 +23,14 @@ export default function LoginPage() {
     try {
       const res = await api.post<{ token: string }>('/auth/login', { username, password })
       localStorage.setItem('token', res.data.token)
+      // 上一个人的身份还缓存着，不清掉会按错误的角色渲染菜单
+      qc.clear()
       navigate('/')
-    } catch {
-      setError('Invalid username or password')
+    } catch (err) {
+      const msg = isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message
+        : undefined
+      setError(msg ?? '登录失败，请稍后重试')
     } finally {
       setLoading(false)
     }
@@ -36,12 +44,12 @@ export default function LoginPage() {
             <Globe className="h-6 w-6" />
           </div>
           <h1 className="text-2xl font-bold">SocialHub</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your account</p>
+          <p className="text-sm text-muted-foreground">登录到你的账号</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">用户名</Label>
             <Input
               id="username"
               value={username}
@@ -51,7 +59,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">密码</Label>
             <Input
               id="password"
               type="password"
@@ -63,7 +71,7 @@ export default function LoginPage() {
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? '登录中…' : '登录'}
           </Button>
         </form>
       </div>
