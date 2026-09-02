@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, Link2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TikTokLoginDialog } from './TikTokLoginDialog'
+import { FacebookLinkDialog, type FacebookLinkResult } from './FacebookLinkDialog'
 import { api } from '@/lib/api'
 import type { Platform } from '@/types'
 
@@ -34,12 +35,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
   // 靠 cookie 内容长相判断来源会把手动粘贴的 JSON 误认成登录所得，从而把输入框收起来
   const [cookiesFromLogin, setCookiesFromLogin] = useState(false)
   const [tiktokLoginOpen, setTiktokLoginOpen] = useState(false)
+  const [facebookLinkOpen, setFacebookLinkOpen] = useState(false)
+  const [fbPage, setFbPage] = useState<{ pageId: string; pageAccessToken: string } | null>(null)
 
   const mutation = useMutation({
     mutationFn: () => api.post('/accounts', {
       platform, username, displayName,
       avatar: avatar || undefined,
-      sessionData: cookies.trim() ? { cookies: cookies.trim() } : undefined,
+      sessionData: buildSessionData(),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
@@ -48,6 +51,11 @@ export function AddAccountDialog({ open, onClose }: Props) {
     },
   })
 
+  function buildSessionData() {
+    if (platform === 'facebook') return fbPage ?? undefined
+    return cookies.trim() ? { cookies: cookies.trim() } : undefined
+  }
+
   function handleClose() {
     setPlatform('tiktok')
     setUsername('')
@@ -55,7 +63,15 @@ export function AddAccountDialog({ open, onClose }: Props) {
     setAvatar('')
     setCookies('')
     setCookiesFromLogin(false)
+    setFbPage(null)
     onClose()
+  }
+
+  function handleFacebookLink(result: FacebookLinkResult) {
+    setFbPage({ pageId: result.pageId, pageAccessToken: result.pageAccessToken })
+    setUsername(result.name)
+    setDisplayName(result.name)
+    if (result.avatar) setAvatar(result.avatar)
   }
 
   function handleTikTokLoginSuccess(result: {
@@ -73,7 +89,9 @@ export function AddAccountDialog({ open, onClose }: Props) {
   }
 
   const isTikTok = platform === 'tiktok'
+  const isFacebook = platform === 'facebook'
   const hasQrCookies = isTikTok && cookiesFromLogin
+  const canSubmit = username.trim() && displayName.trim() && (!isFacebook || fbPage)
 
   return (
     <>
@@ -120,6 +138,28 @@ export function AddAccountDialog({ open, onClose }: Props) {
               </div>
             )}
 
+            {/* Facebook 专属：粘贴系统用户令牌后选主页 */}
+            {isFacebook && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">绑定主页</p>
+                    <p className="text-xs text-muted-foreground">
+                      {fbPage ? `✓ 已绑定主页 ${fbPage.pageId}` : '用商务平台令牌读取并选择主页'}
+                    </p>
+                  </div>
+                  <Button
+                    variant={fbPage ? 'outline' : 'default'}
+                    size="sm"
+                    onClick={() => setFacebookLinkOpen(true)}
+                  >
+                    <Link2 className="h-3.5 w-3.5 mr-1.5" />
+                    {fbPage ? '重新绑定' : '绑定'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>Username</Label>
               <Input
@@ -147,8 +187,8 @@ export function AddAccountDialog({ open, onClose }: Props) {
               />
             </div>
 
-            {/* 非 TikTok 或手动 cookie 备用 */}
-            {(!isTikTok || !hasQrCookies) && (
+            {/* Facebook 走 token 不走 cookie；TikTok 登录成功后不再需要手动粘贴 */}
+            {!isFacebook && (!isTikTok || !hasQrCookies) && (
               <div className="space-y-1.5">
                 <Label>
                   Cookies / Session
@@ -176,7 +216,7 @@ export function AddAccountDialog({ open, onClose }: Props) {
             <Button variant="outline" onClick={handleClose} disabled={mutation.isPending}>取消</Button>
             <Button
               onClick={() => mutation.mutate()}
-              disabled={!username.trim() || !displayName.trim() || mutation.isPending}
+              disabled={!canSubmit || mutation.isPending}
             >
               {mutation.isPending ? '添加中…' : 'Add Account'}
             </Button>
@@ -188,6 +228,12 @@ export function AddAccountDialog({ open, onClose }: Props) {
         open={tiktokLoginOpen}
         onClose={() => setTiktokLoginOpen(false)}
         onSuccess={handleTikTokLoginSuccess}
+      />
+
+      <FacebookLinkDialog
+        open={facebookLinkOpen}
+        onClose={() => setFacebookLinkOpen(false)}
+        onSuccess={handleFacebookLink}
       />
     </>
   )

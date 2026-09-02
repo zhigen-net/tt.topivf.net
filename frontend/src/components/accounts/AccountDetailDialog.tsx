@@ -120,7 +120,7 @@ export function AccountDetailDialog({ account, onClose }: Props) {
               {syncData !== null && (
                 syncData.healthy
                   ? <span className="flex items-center gap-1 text-xs text-emerald-600"><Wifi className="h-3 w-3" />登录有效</span>
-                  : <span className="flex items-center gap-1 text-xs text-red-500"><WifiOff className="h-3 w-3" />Cookie 已失效</span>
+                  : <span className="flex items-center gap-1 text-xs text-red-500"><WifiOff className="h-3 w-3" />{account.platform === 'facebook' ? '授权已失效' : 'Cookie 已失效'}</span>
               )}
             </div>
           </div>

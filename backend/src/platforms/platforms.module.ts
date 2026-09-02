@@ -7,11 +7,13 @@ import { InstagramAdapter } from './instagram/instagram.adapter'
 import { YoutubeAdapter } from './youtube/youtube.adapter'
 import { TwitterAdapter } from './twitter/twitter.adapter'
 import { FacebookAdapter } from './facebook/facebook.adapter'
+import { FacebookService } from './facebook/facebook.service'
+import { FacebookController } from './facebook/facebook.controller'
 import { PlatformsService } from './platforms.service'
 
 @Global()
 @Module({
-  controllers: [TiktokLoginController],
+  controllers: [TiktokLoginController, FacebookController],
   providers: [
     BrowserManager,
     TiktokAdapter,
@@ -20,6 +22,7 @@ import { PlatformsService } from './platforms.service'
     YoutubeAdapter,
     TwitterAdapter,
     FacebookAdapter,
+    FacebookService,
     PlatformsService,
   ],
   exports: [PlatformsService, BrowserManager],
