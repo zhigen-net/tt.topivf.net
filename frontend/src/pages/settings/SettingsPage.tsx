@@ -9,10 +9,10 @@ export default function SettingsPage() {
   const [passwordOpen, setPasswordOpen] = useState(false)
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage your application settings</p>
+        <h1 className="text-xl sm:text-2xl font-bold">设置</h1>
+        <p className="text-muted-foreground text-sm mt-1">管理系统与账号设置</p>
       </div>
 
       <div className="space-y-4 max-w-2xl">
@@ -22,27 +22,27 @@ export default function SettingsPage() {
             <CardDescription>当前登录：{me ? `${me.displayName}（@${me.username}）` : '—'}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">登录密码</p>
                 <p className="text-xs text-muted-foreground">定期更换，避免与其它系统共用</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>修改密码</Button>
+              <Button className="shrink-0" variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>修改密码</Button>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Platform Credentials</CardTitle>
-            <CardDescription>API keys and OAuth credentials for each platform</CardDescription>
+            <CardTitle className="text-base">平台凭证</CardTitle>
+            <CardDescription>各平台的 API Key 与 OAuth 凭证</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {(['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] as const).map((p) => (
               <div key={p} className="flex items-center justify-between py-2 border-b last:border-0">
                 <span className="text-sm capitalize font-medium">{p}</span>
                 <Button variant="outline" size="sm">
-                  Configure
+                  配置
                 </Button>
               </div>
             ))}
@@ -51,17 +51,17 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">General</CardTitle>
-            <CardDescription>Timezone and scheduling preferences</CardDescription>
+            <CardTitle className="text-base">通用</CardTitle>
+            <CardDescription>时区与排期偏好</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Timezone</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">时区</p>
                 <p className="text-xs text-muted-foreground">UTC+0</p>
               </div>
-              <Button variant="outline" size="sm">
-                Change
+              <Button className="shrink-0" variant="outline" size="sm">
+                修改
               </Button>
             </div>
           </CardContent>

@@ -16,6 +16,13 @@ const statusVariant: Record<TaskStatus, 'default' | 'success' | 'destructive' | 
   failed: 'destructive',
 }
 
+const taskStatusLabel: Record<TaskStatus, string> = {
+  pending: '待执行',
+  running: '执行中',
+  done: '已完成',
+  failed: '失败',
+}
+
 export default function TasksPage() {
   const qc = useQueryClient()
   const [newOpen, setNewOpen] = useState(false)
@@ -37,40 +44,89 @@ export default function TasksPage() {
 
   const tasks = data?.data ?? []
 
+  function deleteButton(task: PublishTask) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+        title={task.status === 'running' ? '执行中不能删除' : '删除'}
+        onClick={() => deleteMutation.mutate(task.id)}
+        disabled={deleteMutation.isPending || task.status === 'running'}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    )
+  }
+
+  function resultText(task: PublishTask) {
+    return task.results.length > 0
+      ? `${task.results.filter((r) => r.success).length}/${task.results.length} 成功`
+      : '—'
+  }
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Publish Tasks</h1>
-          <p className="text-muted-foreground text-sm mt-1">{data?.total ?? 0} tasks total</p>
+          <h1 className="text-xl sm:text-2xl font-bold">发布任务</h1>
+          <p className="text-muted-foreground text-sm mt-1">共 {data?.total ?? 0} 个任务</p>
         </div>
-        <Button onClick={() => setNewOpen(true)}>
+        <Button className="shrink-0" onClick={() => setNewOpen(true)}>
           <Plus className="h-4 w-4" />
-          New Task
+          <span className="hidden sm:inline">新建任务</span>
         </Button>
       </div>
 
-      <div className="rounded-xl border overflow-hidden">
+      {isLoading ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+      ) : tasks.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">还没有任务</p>
+      ) : (
+        <div className="space-y-2 md:hidden">
+          {tasks.map((task) => (
+            <div key={task.id} className="rounded-xl border bg-background p-3 space-y-2.5">
+              <div className="flex items-start gap-2" onClick={() => setSelectedTask(task)}>
+                <p className="min-w-0 flex-1 break-words font-medium text-sm">
+                  {task.content?.title ?? task.contentId.slice(0, 8)}
+                </p>
+                <Badge variant={statusVariant[task.status]}>{taskStatusLabel[task.status]}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {task.platforms.join('、') || '—'} · {task.accountIds.length} 个账号 · {resultText(task)}
+              </p>
+              <div className="flex items-center justify-between gap-2 border-t pt-2">
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  计划 {format(new Date(task.scheduledAt), 'MM-dd HH:mm')}
+                </span>
+                <div className="shrink-0">{deleteButton(task)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="hidden md:block rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Content</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Platforms</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Accounts</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Scheduled</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Results</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">作品</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">平台</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">账号</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">计划时间</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">状态</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">结果</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">加载中…</td>
               </tr>
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No tasks yet.</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">还没有任务</td>
               </tr>
             ) : (
               tasks.map((task) => (
@@ -83,28 +139,16 @@ export default function TasksPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{task.accountIds.length} accounts</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {format(new Date(task.scheduledAt), 'MMM d, HH:mm')}
+                  <td className="px-4 py-3 text-muted-foreground">{task.accountIds.length} 个</td>
+                  <td className="px-4 py-3 text-muted-foreground tabular-nums">
+                    {format(new Date(task.scheduledAt), 'MM-dd HH:mm')}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={statusVariant[task.status]}>{task.status}</Badge>
+                    <Badge variant={statusVariant[task.status]}>{taskStatusLabel[task.status]}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {task.results.length > 0
-                      ? `${task.results.filter((r) => r.success).length}/${task.results.length} ok`
-                      : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{resultText(task)}</td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteMutation.mutate(task.id)}
-                      disabled={deleteMutation.isPending || task.status === 'running'}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {deleteButton(task)}
                   </td>
                 </tr>
               ))

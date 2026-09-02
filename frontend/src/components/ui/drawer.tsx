@@ -31,11 +31,11 @@ const DrawerContent = React.forwardRef<
 DrawerContent.displayName = 'DrawerContent'
 
 const DrawerHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('shrink-0 border-b px-6 py-4', className)} {...props} />
+  <div className={cn('shrink-0 border-b px-4 py-4 pr-12 sm:px-6', className)} {...props} />
 )
 
 const DrawerBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex-1 overflow-y-auto px-6 py-4 space-y-5', className)} {...props} />
+  <div className={cn('flex-1 overflow-y-auto px-4 py-4 space-y-5 sm:px-6', className)} {...props} />
 )
 
 const DrawerTitle = React.forwardRef<

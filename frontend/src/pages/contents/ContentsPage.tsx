@@ -135,26 +135,79 @@ export default function ContentsPage() {
     setFormOpen(true)
   }
 
+  /** 表格行和窄屏卡片共用，两边的容器差别太大不好合并成一套 */
+  function rowActions(item: Content) {
+    return (
+      <>
+        {canEdit(item) && (item.reviewStatus === 'draft' || item.reviewStatus === 'rejected') && (
+          <IconAction
+            title="提交审核"
+            disabled={reviewMutation.isPending}
+            onClick={() => reviewMutation.mutate({ ids: [item.id], action: 'submit' })}
+          >
+            <FileCheck className="h-3.5 w-3.5" />
+          </IconAction>
+        )}
+        {isAdmin && item.reviewStatus === 'pending' && (
+          <>
+            <IconAction
+              title="审核通过"
+              disabled={reviewMutation.isPending}
+              onClick={() => reviewMutation.mutate({ ids: [item.id], action: 'approve' })}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            </IconAction>
+            <IconAction title="驳回" onClick={() => setRejecting([item])}>
+              <XCircle className="h-3.5 w-3.5 text-destructive" />
+            </IconAction>
+          </>
+        )}
+        <IconAction
+          title={item.reviewStatus === 'approved' ? '发布' : '审核通过后才能发布'}
+          disabled={item.reviewStatus !== 'approved'}
+          onClick={() => setPublishing([item])}
+        >
+          <Send className="h-3.5 w-3.5" />
+        </IconAction>
+        <IconAction
+          title={canEdit(item) ? '编辑' : '只能编辑自己创建的作品'}
+          disabled={!canEdit(item)}
+          onClick={() => openEdit(item)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </IconAction>
+        <IconAction
+          title={canEdit(item) ? '删除' : '只能删除自己创建的作品'}
+          destructive
+          disabled={!canEdit(item)}
+          onClick={() => setConfirmDelete([item])}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </IconAction>
+      </>
+    )
+  }
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">作品管理</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">作品管理</h1>
           <p className="text-muted-foreground text-sm mt-1">共 {data?.total ?? 0} 个作品</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
-            新建作品
+            <span className="hidden sm:inline">新建作品</span>
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             className="w-full rounded-md border bg-background px-9 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
@@ -165,7 +218,7 @@ export default function ContentsPage() {
         </div>
 
         <Select value={type} onValueChange={(v) => setType(v as ContentType | typeof ALL)}>
-          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>全部类型</SelectItem>
             {allContentTypes.map((t) => (
@@ -175,7 +228,7 @@ export default function ContentsPage() {
         </Select>
 
         <Select value={platform} onValueChange={(v) => setPlatform(v as Platform | typeof ALL)}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[140px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>全部平台</SelectItem>
             {allPlatforms.map((p) => (
@@ -185,7 +238,7 @@ export default function ContentsPage() {
         </Select>
 
         <Select value={reviewStatus} onValueChange={(v) => setReviewStatus(v as ReviewStatus | typeof ALL)}>
-          <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[130px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>全部审核状态</SelectItem>
             {allReviewStatuses.map((s) => (
@@ -195,7 +248,7 @@ export default function ContentsPage() {
         </Select>
 
         <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-          <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-[130px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             {sortOptions.map((o) => (
               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -204,7 +257,11 @@ export default function ContentsPage() {
         </Select>
 
         {hasFilters && (
-          <Button variant="ghost" onClick={() => { setSearchInput(''); setType(ALL); setPlatform(ALL); setReviewStatus(ALL) }}>
+          <Button
+            variant="ghost"
+            className="col-span-2"
+            onClick={() => { setSearchInput(''); setType(ALL); setPlatform(ALL); setReviewStatus(ALL) }}
+          >
             清除筛选
           </Button>
         )}
@@ -280,7 +337,7 @@ export default function ContentsPage() {
           ))}
         </div>
       ) : contents.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-16 text-center">
+        <div className="rounded-xl border border-dashed p-10 sm:p-16 text-center">
           <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
           <p className="text-sm text-muted-foreground">
             {hasFilters ? '没有匹配的作品，试试放宽筛选条件。' : '还没有作品，先添加第一个视频或图片。'}
@@ -290,7 +347,55 @@ export default function ContentsPage() {
           )}
         </div>
       ) : (
-        <div className="rounded-xl border overflow-x-auto">
+        <>
+        <div className="space-y-2 md:hidden">
+          <label className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
+            <Checkbox checked={allChecked} indeterminate={selected.length > 0 && !allChecked} onChange={toggleAll} />
+            全选本页
+          </label>
+          {contents.map((item) => (
+            <div
+              key={item.id}
+              className={`rounded-xl border p-3 space-y-2.5 ${selectedIds.includes(item.id) ? 'bg-primary/5 border-primary/40' : 'bg-background'}`}
+            >
+              <div className="flex gap-3">
+                <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleOne(item.id)} />
+                <div className="h-10 w-16 shrink-0 rounded bg-muted overflow-hidden">
+                  {item.thumbnailUrl ? (
+                    <img src={item.thumbnailUrl} alt="" className="object-cover w-full h-full" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                      {contentTypeLabel[item.type]}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm break-words">{item.title}</p>
+                  {item.caption && <p className="text-xs text-muted-foreground line-clamp-2">{item.caption}</p>}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ReviewState item={item} />
+                <Badge variant="secondary" className="text-xs">{contentTypeLabel[item.type]}</Badge>
+                {item.platforms.map((p) => <PlatformBadge key={p} platform={p} />)}
+              </div>
+
+              <div className="text-xs">
+                <PublishState item={item} />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 border-t pt-2">
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {formatTime(item.createdAt)}{item.createdBy && ` · ${item.createdBy}`}
+                </span>
+                <div className="flex shrink-0 gap-1">{rowActions(item)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block rounded-xl border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
@@ -354,51 +459,7 @@ export default function ContentsPage() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      {canEdit(item) && (item.reviewStatus === 'draft' || item.reviewStatus === 'rejected') && (
-                        <IconAction
-                          title="提交审核"
-                          disabled={reviewMutation.isPending}
-                          onClick={() => reviewMutation.mutate({ ids: [item.id], action: 'submit' })}
-                        >
-                          <FileCheck className="h-3.5 w-3.5" />
-                        </IconAction>
-                      )}
-                      {isAdmin && item.reviewStatus === 'pending' && (
-                        <>
-                          <IconAction
-                            title="审核通过"
-                            disabled={reviewMutation.isPending}
-                            onClick={() => reviewMutation.mutate({ ids: [item.id], action: 'approve' })}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                          </IconAction>
-                          <IconAction title="驳回" onClick={() => setRejecting([item])}>
-                            <XCircle className="h-3.5 w-3.5 text-destructive" />
-                          </IconAction>
-                        </>
-                      )}
-                      <IconAction
-                        title={item.reviewStatus === 'approved' ? '发布' : '审核通过后才能发布'}
-                        disabled={item.reviewStatus !== 'approved'}
-                        onClick={() => setPublishing([item])}
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                      </IconAction>
-                      <IconAction
-                        title={canEdit(item) ? '编辑' : '只能编辑自己创建的作品'}
-                        disabled={!canEdit(item)}
-                        onClick={() => openEdit(item)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </IconAction>
-                      <IconAction
-                        title={canEdit(item) ? '删除' : '只能删除自己创建的作品'}
-                        destructive
-                        disabled={!canEdit(item)}
-                        onClick={() => setConfirmDelete([item])}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </IconAction>
+                      {rowActions(item)}
                     </div>
                   </td>
                 </tr>
@@ -406,6 +467,7 @@ export default function ContentsPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {totalPages > 1 && (

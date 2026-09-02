@@ -36,7 +36,8 @@ body {
 }
 
 #root {
-  height: 100vh;
+  /* 移动端地址栏会伸缩，100vh 会让底部被截掉 */
+  height: 100dvh;
 }
 
 /* Radix 的 data-state 动画：项目没装 tailwindcss-animate，抽屉的滑入自己写 */
@@ -50,3 +51,9 @@ body {
 }
 [data-drawer][data-state='open'] { animation: drawer-in 0.2s ease-out; }
 [data-drawer][data-state='closed'] { animation: drawer-out 0.15s ease-in; }
+
+@keyframes nav-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+[data-nav-drawer][data-state='open'] { animation: nav-in 0.2s ease-out; }

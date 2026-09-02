@@ -38,20 +38,62 @@ export default function UsersPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
+  /** 表格行和窄屏卡片共用 */
+  function rowActions(u: User) {
+    return (
+      <>
+        <IconAction title="编辑" onClick={() => { setEditing(u); setFormOpen(true) }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </IconAction>
+        <IconAction title="重置密码" onClick={() => setResetting(u)}>
+          <KeyRound className="h-3.5 w-3.5" />
+        </IconAction>
+        <IconAction
+          title={u.id === me?.id ? '不能删除自己' : '删除'}
+          disabled={u.id === me?.id}
+          onClick={() => setRemoving(u)}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+        </IconAction>
+      </>
+    )
+  }
+
+  function activeToggle(u: User) {
+    return (
+      <button
+        className={`text-xs ${u.isActive ? 'text-emerald-600' : 'text-muted-foreground'} hover:underline disabled:no-underline`}
+        disabled={u.id === me?.id || toggleActive.isPending}
+        title={u.id === me?.id ? '不能停用自己' : u.isActive ? '点击停用' : '点击启用'}
+        onClick={() => toggleActive.mutate(u)}
+      >
+        {u.isActive ? '已启用' : '已停用'}
+      </button>
+    )
+  }
+
+  function roleBadge(u: User) {
+    return (
+      <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+        {u.role === 'admin' ? '管理员' : '普通用户'}
+      </Badge>
+    )
+  }
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">用户管理</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">用户管理</h1>
           <p className="text-muted-foreground text-sm mt-1">共 {users.length} 个用户</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button onClick={() => { setEditing(null); setFormOpen(true) }}>
             <Plus className="h-4 w-4" />
-            新建用户
+            <span className="hidden sm:inline">新建用户</span>
           </Button>
         </div>
       </div>
@@ -67,7 +109,31 @@ export default function UsersPage() {
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border overflow-x-auto">
+        <>
+        <div className="space-y-2 md:hidden">
+          {users.map((u) => (
+            <div key={u.id} className="rounded-xl border bg-background p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-sm">
+                    {u.displayName}
+                    {u.id === me?.id && <span className="ml-1.5 text-xs text-muted-foreground">（我）</span>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">@{u.username}</p>
+                </div>
+                {roleBadge(u)}
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t pt-2">
+                <span className="text-xs text-muted-foreground">
+                  {activeToggle(u)} · {u.lastLoginAt ? formatTime(u.lastLoginAt) : '从未登录'}
+                </span>
+                <div className="flex shrink-0 gap-1">{rowActions(u)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden md:block rounded-xl border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr>
@@ -88,39 +154,14 @@ export default function UsersPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">@{u.username}</p>
                   </td>
-                  <td className="px-3 py-2">
-                    <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
-                      {u.role === 'admin' ? '管理员' : '普通用户'}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      className={`text-xs ${u.isActive ? 'text-emerald-600' : 'text-muted-foreground'} hover:underline disabled:no-underline`}
-                      disabled={u.id === me?.id || toggleActive.isPending}
-                      title={u.id === me?.id ? '不能停用自己' : u.isActive ? '点击停用' : '点击启用'}
-                      onClick={() => toggleActive.mutate(u)}
-                    >
-                      {u.isActive ? '已启用' : '已停用'}
-                    </button>
-                  </td>
+                  <td className="px-3 py-2">{roleBadge(u)}</td>
+                  <td className="px-3 py-2">{activeToggle(u)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
                     {u.lastLoginAt ? formatTime(u.lastLoginAt) : '从未登录'}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                      <IconAction title="编辑" onClick={() => { setEditing(u); setFormOpen(true) }}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </IconAction>
-                      <IconAction title="重置密码" onClick={() => setResetting(u)}>
-                        <KeyRound className="h-3.5 w-3.5" />
-                      </IconAction>
-                      <IconAction
-                        title={u.id === me?.id ? '不能删除自己' : '删除'}
-                        disabled={u.id === me?.id}
-                        onClick={() => setRemoving(u)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </IconAction>
+                      {rowActions(u)}
                     </div>
                   </td>
                 </tr>
@@ -128,6 +169,7 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <UserFormDialog open={formOpen} user={editing} onClose={() => setFormOpen(false)} />

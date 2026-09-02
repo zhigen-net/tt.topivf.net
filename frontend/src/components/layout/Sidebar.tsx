@@ -24,7 +24,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r bg-background">
+    <aside className="flex h-dvh w-60 flex-col border-r bg-background">
       <div className="flex h-14 items-center gap-2 border-b px-4">
         <Globe className="h-5 w-5 text-primary" />
         <span className="font-semibold text-sm">SocialHub</span>
