@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { ContentsService } from './contents.service'
-import { Content } from './content.entity'
+import { CreateContentDto } from './dto/create-content.dto'
+import { UpdateContentDto } from './dto/update-content.dto'
+import { QueryContentsDto } from './dto/query-contents.dto'
 
 @ApiTags('contents')
 @ApiBearerAuth()
@@ -10,20 +12,28 @@ export class ContentsController {
   constructor(private readonly svc: ContentsService) {}
 
   @Get()
-  findAll(@Query('page') page?: number, @Query('limit') limit?: number) {
-    return this.svc.findAll(page, limit)
+  findAll(@Query() query: QueryContentsDto) {
+    return this.svc.findAll(query)
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.svc.findOne(id) }
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.findOne(id)
+  }
 
   @Post()
-  create(@Body() dto: Partial<Content>) { return this.svc.create(dto) }
+  create(@Body() dto: CreateContentDto) {
+    return this.svc.create(dto)
+  }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: Partial<Content>) { return this.svc.update(id, dto) }
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContentDto) {
+    return this.svc.update(id, dto)
+  }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) { return this.svc.remove(id) }
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.remove(id)
+  }
 }

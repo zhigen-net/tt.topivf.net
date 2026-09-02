@@ -51,6 +51,11 @@ export interface Content {
   size?: number
   duration?: number
   createdAt: string
+  updatedAt: string
+  taskCount: number
+  doneCount: number
+  failedCount: number
+  lastPublishedAt: string | null
 }
 
 export interface PublishTask {
