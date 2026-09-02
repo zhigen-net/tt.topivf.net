@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common'
-import { ApiTags, ApiQuery, ApiBearerAuth } from '@nestjs/swagger'
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAccountDto } from './dto/create-account.dto'
 import { UpdateAccountDto, UpdateStatusDto } from './dto/update-account.dto'
-import type { Platform, AccountStatus } from './account.entity'
+import { QueryAccountsDto } from './dto/query-accounts.dto'
 import { PlatformsService } from '../platforms/platforms.service'
 
 @ApiTags('accounts')
@@ -16,19 +16,8 @@ export class AccountsController {
   ) {}
 
   @Get()
-  @ApiQuery({ name: 'platform', required: false })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'search', required: false })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  findAll(
-    @Query('platform') platform?: Platform,
-    @Query('status') status?: AccountStatus,
-    @Query('search') search?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-  ) {
-    return this.svc.findAll({ platform, status, search, page, limit })
+  findAll(@Query() query: QueryAccountsDto) {
+    return this.svc.findAll(query)
   }
 
   @Get(':id')

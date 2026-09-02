@@ -10,6 +10,11 @@ export class QueryTasksDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID('4')
+  contentId?: string
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

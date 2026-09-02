@@ -17,7 +17,7 @@ export class TasksService {
     @InjectQueue('publish') private publishQueue: Queue,
   ) {}
 
-  async findAll(page = 1, limit = 20, accountId?: string) {
+  async findAll(page = 1, limit = 20, accountId?: string, contentId?: string) {
     const qb = this.repo.createQueryBuilder('t')
       .leftJoinAndSelect('t.content', 'content')
       .orderBy('t.createdAt', 'DESC')
@@ -25,7 +25,8 @@ export class TasksService {
       .take(limit)
 
     // account_ids 是 text[]，包含判断得用数组包含运算符
-    if (accountId) qb.where('t.accountIds @> ARRAY[:accountId]::text[]', { accountId })
+    if (accountId) qb.andWhere('t.accountIds @> ARRAY[:accountId]::text[]', { accountId })
+    if (contentId) qb.andWhere('t.contentId = :contentId', { contentId })
 
     const [data, total] = await qb.getManyAndCount()
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) }

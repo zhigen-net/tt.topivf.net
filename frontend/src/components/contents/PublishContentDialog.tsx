@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { platformLabel } from './constants'
+import { AccountPicker, usePublishHistory } from '@/components/accounts/AccountPicker'
 import { api } from '@/lib/api'
 import type { Account, Content, Platform } from '@/types'
 
@@ -29,9 +30,10 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
     setScheduledAt(defaultSchedule())
   }, [open, contents])
 
+  // 列表页那份是分页的（默认 20 条），选账号得把全部拿回来
   const { data } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => api.get<{ data: Account[] }>('/accounts').then((r) => r.data),
+    queryKey: ['accounts', 'all'],
+    queryFn: () => api.get<{ data: Account[] }>('/accounts', { params: { limit: 500 } }).then((r) => r.data),
     enabled: open,
   })
 
@@ -39,6 +41,9 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
     () => [...new Set(contents.flatMap((c) => c.platforms))] as Platform[],
     [contents],
   )
+
+  // 多选时每个作品的发布情况各不相同，按账号标记「已发布」没有意义
+  const history = usePublishHistory(contents.length === 1 ? contents[0].id : undefined, open)
 
   const accounts = data?.data ?? []
   // 只有内容声明过的平台才发得出去，其它账号列出来只会误导
@@ -76,10 +81,6 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
     },
   })
 
-  function toggle(id: string) {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-  }
-
   const willPublish = contents.length - unmatched.length
 
   return (
@@ -110,31 +111,14 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
                 选择账号
                 {selected.length > 0 && <span className="text-muted-foreground"> （已选 {selected.length} 个）</span>}
               </Label>
-              {candidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  没有匹配这些作品目标平台的账号，请先添加账号或调整作品的目标平台。
-                </p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
-                  {candidates.map((a) => (
-                    <label key={a.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/50">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(a.id)}
-                        onChange={() => toggle(a.id)}
-                        className="h-4 w-4 rounded"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{a.displayName}</span>
-                        <span className="text-xs text-muted-foreground ml-1">· {platformLabel[a.platform]}</span>
-                      </div>
-                      {a.status !== 'active' && (
-                        <span className="text-xs text-amber-600 shrink-0">未启用</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
+              <AccountPicker
+                key={contents.map((c) => c.id).join(',')}
+                accounts={candidates}
+                selected={selected}
+                onChange={setSelected}
+                history={history}
+                emptyHint="没有匹配这些作品目标平台的账号，请先添加账号或调整作品的目标平台。"
+              />
             </div>
 
             <div className="space-y-1.5">

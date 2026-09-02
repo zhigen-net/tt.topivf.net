@@ -11,7 +11,9 @@ export class TasksController {
   constructor(private readonly svc: TasksService) {}
 
   @Get()
-  findAll(@Query() query: QueryTasksDto) { return this.svc.findAll(query.page, query.limit, query.accountId) }
+  findAll(@Query() query: QueryTasksDto) {
+    return this.svc.findAll(query.page, query.limit, query.accountId, query.contentId)
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) { return this.svc.findOne(id) }

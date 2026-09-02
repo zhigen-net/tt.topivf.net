@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AccountPicker, usePublishHistory } from '@/components/accounts/AccountPicker'
 import { api } from '@/lib/api'
 import type { Account, Content } from '@/types'
 
@@ -29,9 +30,10 @@ export function NewTaskDialog({ open, onClose }: Props) {
     enabled: open,
   })
 
+  // 列表页那份是分页的（默认 20 条），选账号得把全部拿回来
   const { data: accountsData } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => api.get<{ data: Account[] }>('/accounts').then((r) => r.data),
+    queryKey: ['accounts', 'all'],
+    queryFn: () => api.get<{ data: Account[] }>('/accounts', { params: { limit: 500 } }).then((r) => r.data),
     enabled: open,
   })
 
@@ -42,6 +44,8 @@ export function NewTaskDialog({ open, onClose }: Props) {
   const allowedAccounts = selectedContent
     ? accounts.filter((a) => selectedContent.platforms.includes(a.platform))
     : accounts
+
+  const history = usePublishHistory(contentId || undefined, open)
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -70,27 +74,29 @@ export function NewTaskDialog({ open, onClose }: Props) {
     onClose()
   }
 
-  function toggleAccount(id: string) {
-    setSelectedAccounts((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  function pickContent(id: string) {
+    setContentId(id)
+    // 换了作品，可选平台跟着变，旧的勾选留着会带上发不出去的账号
+    setSelectedAccounts([])
   }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New Publish Task</DialogTitle>
+          <DialogTitle>新建发布任务</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Content</Label>
-            <Select value={contentId} onValueChange={setContentId}>
+            <Label>作品</Label>
+            <Select value={contentId} onValueChange={pickContent}>
               <SelectTrigger>
-                <SelectValue placeholder="Select content…" />
+                <SelectValue placeholder="选择作品…" />
               </SelectTrigger>
               <SelectContent>
                 {contents.length === 0 ? (
-                  <SelectItem value="_empty" disabled>No content available</SelectItem>
+                  <SelectItem value="_empty" disabled>还没有作品</SelectItem>
                 ) : (
                   contents.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
@@ -101,33 +107,22 @@ export function NewTaskDialog({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Target Accounts {selectedAccounts.length > 0 && <span className="text-muted-foreground">({selectedAccounts.length} selected)</span>}</Label>
-            {allowedAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {contentId ? "No accounts match this content's platforms." : 'No accounts available.'}
-              </p>
-            ) : (
-              <div className="max-h-40 overflow-y-auto rounded-md border divide-y">
-                {allowedAccounts.map((a) => (
-                  <label key={a.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={selectedAccounts.includes(a.id)}
-                      onChange={() => toggleAccount(a.id)}
-                      className="h-4 w-4 rounded"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium">{a.displayName}</span>
-                      <span className="text-xs text-muted-foreground ml-1 capitalize">· {a.platform}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
+            <Label>
+              目标账号
+              {selectedAccounts.length > 0 && <span className="text-muted-foreground"> （已选 {selectedAccounts.length} 个）</span>}
+            </Label>
+            <AccountPicker
+              key={contentId}
+              accounts={allowedAccounts}
+              selected={selectedAccounts}
+              onChange={setSelectedAccounts}
+              history={history}
+              emptyHint={contentId ? '没有匹配该作品目标平台的账号。' : '还没有账号。'}
+            />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Scheduled Time</Label>
+            <Label>发布时间</Label>
             <Input
               type="datetime-local"
               value={scheduledAt}
@@ -135,16 +130,16 @@ export function NewTaskDialog({ open, onClose }: Props) {
             />
           </div>
 
-          {mutation.isError && <p className="text-sm text-destructive">Failed to create task. Please try again.</p>}
+          {mutation.isError && <p className="text-sm text-destructive">创建任务失败，请重试。</p>}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={mutation.isPending}>Cancel</Button>
+          <Button variant="outline" onClick={handleClose} disabled={mutation.isPending}>取消</Button>
           <Button
             onClick={() => mutation.mutate()}
             disabled={!contentId || selectedAccounts.length === 0 || mutation.isPending}
           >
-            {mutation.isPending ? 'Creating…' : 'Create Task'}
+            {mutation.isPending ? '创建中…' : '创建任务'}
           </Button>
         </DialogFooter>
       </DialogContent>
