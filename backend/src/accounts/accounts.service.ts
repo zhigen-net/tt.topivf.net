@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, FindOptionsWhere, ILike } from 'typeorm'
 import { Account, Platform, AccountStatus } from './account.entity'
 import { CreateAccountDto } from './dto/create-account.dto'
+import { UpdateAccountDto } from './dto/update-account.dto'
 import { BrowserManager } from '../platforms/browser-manager.service'
 import type { PlatformsService } from '../platforms/platforms.service'
 
@@ -43,7 +44,7 @@ export class AccountsService {
     return this.repo.save(account)
   }
 
-  async update(id: string, dto: Partial<CreateAccountDto>) {
+  async update(id: string, dto: UpdateAccountDto) {
     await this.findOne(id)
     await this.repo.update(id, dto as any)
     // cookie 只在 context 创建那一刻注入，不丢掉缓存的话新 cookie 永远不会生效

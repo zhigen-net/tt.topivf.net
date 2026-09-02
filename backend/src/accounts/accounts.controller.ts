@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode, HttpStatus, ParseUUIDPipe } from '@nestjs/common'
 import { ApiTags, ApiQuery, ApiBearerAuth } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
 import { CreateAccountDto } from './dto/create-account.dto'
+import { UpdateAccountDto, UpdateStatusDto } from './dto/update-account.dto'
 import type { Platform, AccountStatus } from './account.entity'
 import { PlatformsService } from '../platforms/platforms.service'
 
@@ -41,13 +42,13 @@ export class AccountsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: Partial<CreateAccountDto>) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
     return this.svc.update(id, dto)
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body('status') status: AccountStatus) {
-    return this.svc.updateStatus(id, status)
+  updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStatusDto) {
+    return this.svc.updateStatus(id, dto.status)
   }
 
   @Post(':id/sync')

@@ -6,6 +6,7 @@ import { PublishTask } from '../tasks/publish-task.entity'
 import { CreateContentDto } from './dto/create-content.dto'
 import { UpdateContentDto } from './dto/update-content.dto'
 import { QueryContentsDto } from './dto/query-contents.dto'
+import type { Platform } from '../accounts/account.entity'
 
 export interface PublishSummary {
   taskCount: number
@@ -69,6 +70,16 @@ export class ContentsService {
   async remove(id: string) {
     await this.findOne(id)
     await this.repo.delete(id)
+  }
+
+  async bulkRemove(ids: string[]) {
+    const res = await this.repo.delete(ids)
+    return { deleted: res.affected ?? 0 }
+  }
+
+  async bulkSetPlatforms(ids: string[], platforms: Platform[]) {
+    const res = await this.repo.update(ids, { platforms })
+    return { updated: res.affected ?? 0 }
   }
 
   /** 一次性把整页作品的发布情况聚合出来，避免每张卡片各查一次 */

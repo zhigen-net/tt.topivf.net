@@ -38,3 +38,15 @@ body {
 #root {
   height: 100vh;
 }
+
+/* Radix 的 data-state 动画：项目没装 tailwindcss-animate，抽屉的滑入自己写 */
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes drawer-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+[data-drawer][data-state='open'] { animation: drawer-in 0.2s ease-out; }
+[data-drawer][data-state='closed'] { animation: drawer-out 0.15s ease-in; }

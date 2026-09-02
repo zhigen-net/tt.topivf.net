@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Plus, Search, RefreshCw, Trash2 } from 'lucide-react'
+import { Plus, Search, RefreshCw, Trash2, Pencil } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
-import { AccountDetailDialog } from '@/components/accounts/AccountDetailDialog'
+import { AccountDetailDrawer } from '@/components/accounts/AccountDetailDrawer'
+import { AccountEditDialog } from '@/components/accounts/AccountEditDialog'
 import { api } from '@/lib/api'
 import type { Account, AccountStatus } from '@/types'
 
@@ -27,12 +28,17 @@ export default function AccountsPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => api.get<{ data: Account[]; total: number }>('/accounts').then((r) => r.data),
   })
+
+  // 抽屉里存 id 而不是对象，编辑保存后才能拿到刷新过的数据
+  const selectedAccount = data?.data.find((a) => a.id === selectedId) ?? null
+  const editingAccount = data?.data.find((a) => a.id === editingId) ?? null
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/accounts/${id}`),
@@ -110,7 +116,7 @@ export default function AccountsPage() {
                   {/* 点击账号信息区域打开详情 */}
                   <td
                     className="px-4 py-3 cursor-pointer"
-                    onClick={() => setSelectedAccount(account)}
+                    onClick={() => setSelectedId(account.id)}
                   >
                     <div className="flex items-center gap-2">
                       {account.avatar ? (
@@ -143,16 +149,28 @@ export default function AccountsPage() {
                   <td className="px-4 py-3 text-right tabular-nums">{fmtNum(account.followers)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{account.postsCount}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{account.proxyId ? account.proxyId.slice(0, 8) + '…' : '—'}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteMutation.mutate(account.id)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        title="编辑"
+                        onClick={() => setEditingId(account.id)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        title="删除"
+                        onClick={() => deleteMutation.mutate(account.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -162,10 +180,12 @@ export default function AccountsPage() {
       </div>
 
       <AddAccountDialog open={addOpen} onClose={() => setAddOpen(false)} />
-      <AccountDetailDialog
+      <AccountDetailDrawer
         account={selectedAccount}
         onClose={() => setSelectedAccount(null)}
+        onEdit={(a) => setEditingId(a.id)}
       />
+      <AccountEditDialog account={editingAccount} onClose={() => setEditingAccount(null)} />
     </div>
   )
 }

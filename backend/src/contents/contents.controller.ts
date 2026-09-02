@@ -4,6 +4,7 @@ import { ContentsService } from './contents.service'
 import { CreateContentDto } from './dto/create-content.dto'
 import { UpdateContentDto } from './dto/update-content.dto'
 import { QueryContentsDto } from './dto/query-contents.dto'
+import { BulkIdsDto, BulkPlatformsDto } from './dto/bulk-contents.dto'
 
 @ApiTags('contents')
 @ApiBearerAuth()
@@ -24,6 +25,17 @@ export class ContentsController {
   @Post()
   create(@Body() dto: CreateContentDto) {
     return this.svc.create(dto)
+  }
+
+  // 批量操作走 POST 子路径，否则会被 :id 上的 ParseUUIDPipe 拦掉
+  @Post('bulk-delete')
+  bulkRemove(@Body() dto: BulkIdsDto) {
+    return this.svc.bulkRemove(dto.ids)
+  }
+
+  @Post('bulk-platforms')
+  bulkSetPlatforms(@Body() dto: BulkPlatformsDto) {
+    return this.svc.bulkSetPlatforms(dto.ids, dto.platforms)
   }
 
   @Patch(':id')

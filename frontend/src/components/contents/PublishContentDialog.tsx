@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -7,46 +7,65 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { platformLabel } from './constants'
 import { api } from '@/lib/api'
-import type { Account, Content } from '@/types'
+import type { Account, Content, Platform } from '@/types'
 
 interface Props {
-  content: Content | null
+  contents: Content[]
   onClose: () => void
   onPublished: () => void
 }
 
-export function PublishContentDialog({ content, onClose, onPublished }: Props) {
+export function PublishContentDialog({ contents, onClose, onPublished }: Props) {
   const qc = useQueryClient()
+  const open = contents.length > 0
   const [selected, setSelected] = useState<string[]>([])
   const [immediate, setImmediate] = useState(true)
   const [scheduledAt, setScheduledAt] = useState(defaultSchedule)
 
   useEffect(() => {
-    if (!content) return
+    if (!open) return
     setSelected([])
     setImmediate(true)
     setScheduledAt(defaultSchedule())
-  }, [content])
+  }, [open, contents])
 
   const { data } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => api.get<{ data: Account[] }>('/accounts').then((r) => r.data),
-    enabled: Boolean(content),
+    enabled: open,
   })
+
+  const platforms = useMemo(
+    () => [...new Set(contents.flatMap((c) => c.platforms))] as Platform[],
+    [contents],
+  )
 
   const accounts = data?.data ?? []
   // 只有内容声明过的平台才发得出去，其它账号列出来只会误导
-  const candidates = content ? accounts.filter((a) => content.platforms.includes(a.platform)) : []
+  const candidates = accounts.filter((a) => platforms.includes(a.platform))
   const inactiveSelected = candidates.filter((a) => selected.includes(a.id) && a.status !== 'active')
+
+  // 多选时每个作品的目标平台可能不同，后端会按平台裁剪账号，这里先算出会被跳过的
+  const unmatched = contents.filter(
+    (c) => !candidates.some((a) => selected.includes(a.id) && c.platforms.includes(a.platform)),
+  )
 
   const mutation = useMutation({
     mutationFn: () => {
-      const platforms = [...new Set(candidates.filter((a) => selected.includes(a.id)).map((a) => a.platform))]
-      return api.post('/tasks', {
-        contentId: content!.id,
+      const at = immediate ? new Date().toISOString() : new Date(scheduledAt).toISOString()
+      if (contents.length === 1) {
+        const picked = candidates.filter((a) => selected.includes(a.id) && contents[0].platforms.includes(a.platform))
+        return api.post('/tasks', {
+          contentId: contents[0].id,
+          accountIds: picked.map((a) => a.id),
+          platforms: [...new Set(picked.map((a) => a.platform))],
+          scheduledAt: at,
+        })
+      }
+      return api.post('/tasks/bulk', {
+        contentIds: contents.map((c) => c.id),
         accountIds: selected,
-        platforms,
-        scheduledAt: immediate ? new Date().toISOString() : new Date(scheduledAt).toISOString(),
+        scheduledAt: at,
       })
     },
     onSuccess: () => {
@@ -61,19 +80,28 @@ export function PublishContentDialog({ content, onClose, onPublished }: Props) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
+  const willPublish = contents.length - unmatched.length
+
   return (
-    <Dialog open={Boolean(content)} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>发布作品</DialogTitle>
+          <DialogTitle>{contents.length > 1 ? `批量发布 ${contents.length} 个作品` : '发布作品'}</DialogTitle>
         </DialogHeader>
 
-        {content && (
+        {open && (
           <div className="space-y-4">
             <div className="rounded-lg border bg-muted/30 px-3 py-2">
-              <p className="text-sm font-medium truncate">{content.title}</p>
+              {contents.length === 1 ? (
+                <p className="text-sm font-medium truncate">{contents[0].title}</p>
+              ) : (
+                <p className="text-sm font-medium truncate">
+                  {contents.slice(0, 3).map((c) => c.title).join('、')}
+                  {contents.length > 3 && ` 等 ${contents.length} 个`}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-0.5">
-                目标平台：{content.platforms.map((p) => platformLabel[p]).join('、')}
+                目标平台：{platforms.map((p) => platformLabel[p]).join('、')}
               </p>
             </div>
 
@@ -84,7 +112,7 @@ export function PublishContentDialog({ content, onClose, onPublished }: Props) {
               </Label>
               {candidates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  没有匹配该作品目标平台的账号，请先添加账号或调整作品的目标平台。
+                  没有匹配这些作品目标平台的账号，请先添加账号或调整作品的目标平台。
                 </p>
               ) : (
                 <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
@@ -140,6 +168,17 @@ export function PublishContentDialog({ content, onClose, onPublished }: Props) {
               )}
             </div>
 
+            {selected.length > 0 && unmatched.length > 0 && (
+              <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-px" />
+                <span>
+                  {unmatched.length} 个作品的目标平台和已选账号对不上，会被跳过：
+                  {unmatched.slice(0, 3).map((c) => c.title).join('、')}
+                  {unmatched.length > 3 && ' …'}
+                </span>
+              </div>
+            )}
+
             {inactiveSelected.length > 0 && (
               <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-px" />
@@ -155,8 +194,8 @@ export function PublishContentDialog({ content, onClose, onPublished }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>取消</Button>
-          <Button onClick={() => mutation.mutate()} disabled={selected.length === 0 || mutation.isPending}>
-            {mutation.isPending ? '提交中…' : immediate ? '立即发布' : '创建定时任务'}
+          <Button onClick={() => mutation.mutate()} disabled={willPublish === 0 || mutation.isPending}>
+            {mutation.isPending ? '提交中…' : immediate ? `立即发布${contents.length > 1 ? ` ${willPublish} 个` : ''}` : '创建定时任务'}
           </Button>
         </DialogFooter>
       </DialogContent>
