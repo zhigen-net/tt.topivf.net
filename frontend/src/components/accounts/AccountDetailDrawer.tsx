@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { contentTypeLabel } from '@/components/contents/constants'
+import { AccountEditForm } from './AccountEditForm'
 import { api } from '@/lib/api'
 import type { Account, AccountStatus, PaginatedResponse, Proxy, PublishTask, TaskStatus } from '@/types'
 
@@ -51,12 +52,14 @@ const taskStatusClass: Record<TaskStatus, string> = {
 
 interface Props {
   account: Account | null
+  /** 从列表的编辑按钮进来时直接展开表单 */
+  initialMode?: 'view' | 'edit'
   onClose: () => void
-  onEdit: (account: Account) => void
 }
 
-export function AccountDetailDrawer({ account, onClose, onEdit }: Props) {
+export function AccountDetailDrawer({ account, initialMode = 'view', onClose }: Props) {
   const qc = useQueryClient()
+  const [mode, setMode] = useState<'view' | 'edit'>(initialMode)
   const [syncData, setSyncData] = useState<SyncResult | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -105,6 +108,7 @@ export function AccountDetailDrawer({ account, onClose, onEdit }: Props) {
     if (!account) return
     setSyncData(null)
     setSyncError(null)
+    setMode(initialMode)
 
     if (!autoSyncedIds.has(account.id)) {
       autoSyncedIds.add(account.id)
@@ -149,14 +153,26 @@ export function AccountDetailDrawer({ account, onClose, onEdit }: Props) {
               </div>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={() => onEdit(account)}>
-                <Pencil className="h-3.5 w-3.5" />
-                编辑
-              </Button>
+              {mode === 'view' && (
+                <Button variant="outline" size="sm" onClick={() => setMode('edit')}>
+                  <Pencil className="h-3.5 w-3.5" />
+                  编辑
+                </Button>
+              )}
             </div>
           </div>
         </DrawerHeader>
 
+        {mode === 'edit' ? (
+          <DrawerBody>
+            <AccountEditForm
+              key={account.id}
+              account={account}
+              onCancel={() => setMode('view')}
+              onSaved={() => setMode('view')}
+            />
+          </DrawerBody>
+        ) : (
         <DrawerBody>
           <Section
             title="数据统计"
@@ -272,6 +288,7 @@ export function AccountDetailDrawer({ account, onClose, onEdit }: Props) {
             </div>
           </Section>
         </DrawerBody>
+        )}
       </DrawerContent>
     </Drawer>
   )

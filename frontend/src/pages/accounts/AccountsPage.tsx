@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
 import { AccountDetailDrawer } from '@/components/accounts/AccountDetailDrawer'
-import { AccountEditDialog } from '@/components/accounts/AccountEditDialog'
 import { api } from '@/lib/api'
 import type { Account, AccountStatus } from '@/types'
 
@@ -29,7 +28,7 @@ export default function AccountsPage() {
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [drawerMode, setDrawerMode] = useState<'view' | 'edit'>('view')
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['accounts'],
@@ -38,7 +37,11 @@ export default function AccountsPage() {
 
   // 抽屉里存 id 而不是对象，编辑保存后才能拿到刷新过的数据
   const selectedAccount = data?.data.find((a) => a.id === selectedId) ?? null
-  const editingAccount = data?.data.find((a) => a.id === editingId) ?? null
+
+  function openDrawer(id: string, mode: 'view' | 'edit') {
+    setDrawerMode(mode)
+    setSelectedId(id)
+  }
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/accounts/${id}`),
@@ -116,7 +119,7 @@ export default function AccountsPage() {
                   {/* 点击账号信息区域打开详情 */}
                   <td
                     className="px-4 py-3 cursor-pointer"
-                    onClick={() => setSelectedId(account.id)}
+                    onClick={() => openDrawer(account.id, 'view')}
                   >
                     <div className="flex items-center gap-2">
                       {account.avatar ? (
@@ -156,7 +159,7 @@ export default function AccountsPage() {
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-foreground"
                         title="编辑"
-                        onClick={() => setEditingId(account.id)}
+                        onClick={() => openDrawer(account.id, 'edit')}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -182,10 +185,9 @@ export default function AccountsPage() {
       <AddAccountDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <AccountDetailDrawer
         account={selectedAccount}
-        onClose={() => setSelectedAccount(null)}
-        onEdit={(a) => setEditingId(a.id)}
+        initialMode={drawerMode}
+        onClose={() => setSelectedId(null)}
       />
-      <AccountEditDialog account={editingAccount} onClose={() => setEditingAccount(null)} />
     </div>
   )
 }
