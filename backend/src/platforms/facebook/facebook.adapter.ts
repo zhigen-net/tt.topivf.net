@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
-import { graphGet, graphPost, GraphError } from './graph-api'
+import { graphGet, graphPost, graphUpload, GraphError } from './graph-api'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
 
@@ -11,6 +11,9 @@ export interface FacebookSession {
 
 const VIDEO_POLL_INTERVAL_MS = 5_000
 const VIDEO_POLL_MAX_ATTEMPTS = 60
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv']
+
+type VideoOutcome = 'ready' | 'failed' | 'timeout' | 'unverified'
 
 @Injectable()
 export class FacebookAdapter extends PlatformAdapter {
@@ -27,33 +30,21 @@ export class FacebookAdapter extends PlatformAdapter {
     try {
       if (!content.fileUrl) {
         const res = await graphPost<{ id: string }>(`/${pageId}/feed`, { message }, pageAccessToken)
-        return { success: true, postId: res.id, postUrl: permalink(res.id) }
+        return { success: true, postId: res.id, postUrl: postLink(res.id) }
       }
 
-      if (content.type === 'image') {
-        const res = await graphPost<{ id: string; post_id?: string }>(
-          `/${pageId}/photos`,
-          { url: content.fileUrl, caption: message },
-          pageAccessToken,
-        )
-        const id = res.post_id ?? res.id
-        return { success: true, postId: id, postUrl: permalink(id) }
+      switch (content.type) {
+        case 'image':
+          return await this.publishPhoto(pageId, pageAccessToken, content.fileUrl, message)
+        case 'video':
+          return await this.publishVideo(pageId, pageAccessToken, content.fileUrl, message)
+        case 'reel':
+          return await this.publishReel(pageId, pageAccessToken, content.fileUrl, message)
+        case 'story':
+          return await this.publishStory(pageId, pageAccessToken, content.fileUrl)
+        default:
+          return { success: false, error: `不支持的内容类型: ${content.type}` }
       }
-
-      if (content.type === 'video' || content.type === 'reel' || content.type === 'story') {
-        const res = await graphPost<{ id: string }>(
-          `/${pageId}/videos`,
-          { file_url: content.fileUrl, description: message },
-          pageAccessToken,
-          { videoHost: true },
-        )
-        // Facebook 收下 URL 就立刻返回，转码是异步的；不等就无法判断真的发出去了
-        const ready = await this.waitForVideo(res.id, pageAccessToken)
-        if (!ready) return { success: false, error: '视频已提交，但 Facebook 转码未在预期时间内完成' }
-        return { success: true, postId: res.id, postUrl: permalink(res.id) }
-      }
-
-      return { success: false, error: `不支持的内容类型: ${content.type}` }
     } catch (err) {
       const msg = err instanceof GraphError ? `[${err.code}] ${err.message}` : String(err)
       this.logger.error(`Facebook publish failed for ${account.username}: ${msg}`)
@@ -118,7 +109,113 @@ export class FacebookAdapter extends PlatformAdapter {
     }
   }
 
-  private async waitForVideo(videoId: string, token: string): Promise<boolean> {
+  private async publishPhoto(
+    pageId: string,
+    token: string,
+    fileUrl: string,
+    message: string,
+  ): Promise<PostResult> {
+    const res = await graphPost<{ id: string; post_id?: string }>(
+      `/${pageId}/photos`,
+      { url: fileUrl, caption: message },
+      token,
+    )
+    const id = res.post_id ?? res.id
+    return { success: true, postId: id, postUrl: postLink(id) }
+  }
+
+  private async publishVideo(
+    pageId: string,
+    token: string,
+    fileUrl: string,
+    message: string,
+  ): Promise<PostResult> {
+    const res = await graphPost<{ id: string }>(
+      `/${pageId}/videos`,
+      { file_url: fileUrl, description: message },
+      token,
+      { videoHost: true },
+    )
+    // Facebook 收下 URL 就立刻返回，转码是异步的；不等就无法判断真的发出去了
+    return this.settle(res.id, token, postLink(res.id), '视频')
+  }
+
+  /** Reels 不接受 /videos，必须走 start → rupload → finish 三段式 */
+  private async publishReel(
+    pageId: string,
+    token: string,
+    fileUrl: string,
+    message: string,
+  ): Promise<PostResult> {
+    const start = await graphPost<{ video_id: string; upload_url: string }>(
+      `/${pageId}/video_reels`,
+      { upload_phase: 'start' },
+      token,
+    )
+    await graphUpload(start.upload_url, fileUrl, token)
+    const finish = await graphPost<{ post_id?: string }>(
+      `/${pageId}/video_reels`,
+      {
+        upload_phase: 'finish',
+        video_id: start.video_id,
+        video_state: 'PUBLISHED',
+        description: message,
+      },
+      token,
+    )
+    const id = finish.post_id ?? start.video_id
+    return this.settle(start.video_id, token, reelLink(start.video_id), 'Reel', id)
+  }
+
+  /** Stories 端点不接受文案，图片和视频还是两条完全不同的链路 */
+  private async publishStory(pageId: string, token: string, fileUrl: string): Promise<PostResult> {
+    if (isVideoFile(fileUrl)) {
+      const start = await graphPost<{ video_id: string; upload_url: string }>(
+        `/${pageId}/video_stories`,
+        { upload_phase: 'start' },
+        token,
+      )
+      await graphUpload(start.upload_url, fileUrl, token)
+      const finish = await graphPost<{ post_id?: string }>(
+        `/${pageId}/video_stories`,
+        { upload_phase: 'finish', video_id: start.video_id },
+        token,
+      )
+      const id = finish.post_id ?? start.video_id
+      return this.settle(start.video_id, token, postLink(id), '快拍', id)
+    }
+
+    // 图片快拍要先传一张未发布的照片，再用 photo_id 单独发
+    const photo = await graphPost<{ id: string }>(
+      `/${pageId}/photos`,
+      { url: fileUrl, published: 'false' },
+      token,
+    )
+    const story = await graphPost<{ post_id?: string }>(
+      `/${pageId}/photo_stories`,
+      { photo_id: photo.id },
+      token,
+    )
+    const id = story.post_id ?? photo.id
+    return { success: true, postId: id, postUrl: postLink(id) }
+  }
+
+  private async settle(
+    videoId: string,
+    token: string,
+    url: string,
+    label: string,
+    postId = videoId,
+  ): Promise<PostResult> {
+    const outcome = await this.waitForVideo(videoId, token)
+    if (outcome === 'failed') return { success: false, error: `${label}转码失败` }
+    if (outcome === 'timeout') {
+      return { success: false, error: `${label}已提交，但 Facebook 转码未在预期时间内完成` }
+    }
+    return { success: true, postId, postUrl: url }
+  }
+
+  private async waitForVideo(videoId: string, token: string): Promise<VideoOutcome> {
     for (let i = 0; i < VIDEO_POLL_MAX_ATTEMPTS; i++) {
       await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS))
       try {
@@ -128,13 +225,18 @@ export class FacebookAdapter extends PlatformAdapter {
           token,
         )
         const state = res.status?.video_status
-        if (state === 'ready') return true
-        if (state === 'error') return false
+        if (state === 'ready') return 'ready'
+        if (state === 'error') return 'failed'
       } catch (err) {
+        // 缺读权限时轮询永远不会成功，硬等满 5 分钟只会把任务卡死
+        if (err instanceof GraphError && (err.isAuthError || err.isPermissionError)) {
+          this.logger.warn(`无法读取 ${videoId} 的转码状态（凭证缺少读权限），跳过确认`)
+          return 'unverified'
+        }
         this.logger.warn(`video status poll failed for ${videoId}: ${err}`)
       }
     }
-    return false
+    return 'timeout'
   }
 }
 
@@ -150,6 +252,15 @@ function buildMessage(content: Content): string {
   return [content.caption, tags].filter(Boolean).join('\n\n')
 }
 
-function permalink(postId: string): string {
+function postLink(postId: string): string {
   return `https://www.facebook.com/${postId}`
+}
+
+function reelLink(videoId: string): string {
+  return `https://www.facebook.com/reel/${videoId}`
+}
+
+function isVideoFile(fileUrl: string): boolean {
+  const path = fileUrl.split(/[?#]/)[0].toLowerCase()
+  return VIDEO_EXTENSIONS.some((ext) => path.endsWith(ext))
 }

@@ -20,10 +20,19 @@ export class GraphError extends Error {
   get isRateLimit(): boolean {
     return this.code === 4 || this.code === 17 || this.code === 32 || this.code === 613
   }
+
+  /** 权限不足，重试多少次都不会变好 */
+  get isPermissionError(): boolean {
+    return this.code === 10 || this.code === 200
+  }
 }
 
-async function request<T>(url: string, init: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(60_000) })
+const DEFAULT_TIMEOUT_MS = 60_000
+// Facebook 自己去拉取 file_url，大文件可能拉很久
+const UPLOAD_TIMEOUT_MS = 10 * 60_000
+
+async function request<T>(url: string, init: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
   const body = await res.json().catch(() => null)
 
   if (body?.error) {
@@ -53,4 +62,26 @@ export function graphPost<T>(
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body,
   })
+}
+
+/**
+ * 把远端文件交给 Reels / Stories 的分片上传端点。
+ * rupload 不是 Graph，失败时返回的是 debug_info 而不是 error，得单独解析。
+ */
+export async function graphUpload(uploadUrl: string, fileUrl: string, token: string): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { authorization: `OAuth ${token}`, file_url: fileUrl },
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+  })
+  const body = await res.json().catch(() => null)
+
+  if (body?.debug_info) {
+    throw new GraphError(res.status, undefined, body.debug_info.message ?? JSON.stringify(body.debug_info))
+  }
+  if (body?.error) {
+    const { code, error_subcode, message } = body.error
+    throw new GraphError(Number(code), error_subcode ? Number(error_subcode) : undefined, message)
+  }
+  if (!res.ok) throw new GraphError(res.status, undefined, `Upload HTTP ${res.status}`)
 }
