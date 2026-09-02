@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm'
+import { Exclude } from 'class-transformer'
 
 @Entity('proxies')
 export class Proxy {
@@ -17,6 +18,7 @@ export class Proxy {
   @Column({ nullable: true })
   username?: string
 
+  @Exclude()
   @Column({ nullable: true })
   password?: string
 

@@ -94,6 +94,7 @@ export class AccountsService {
     }
 
     const updated = await this.findOne(id)
-    return { ...updated, healthy }
+    // 必须保留 Account 实例，展开成普通对象会让 @Exclude 失效、把凭证漏出去
+    return Object.assign(updated, { healthy })
   }
 }

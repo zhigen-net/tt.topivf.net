@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
   UpdateDateColumn, ManyToOne, JoinColumn,
 } from 'typeorm'
+import { Exclude } from 'class-transformer'
 import { Proxy } from '../proxies/proxy.entity'
 
 export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook'
@@ -46,6 +47,8 @@ export class Account {
   @Column({ name: 'posts_count', default: 0 })
   postsCount: number
 
+  // cookie / access token 等同密码，任何响应都不该带出去
+  @Exclude()
   @Column({ name: 'session_data', type: 'jsonb', nullable: true })
   sessionData?: Record<string, unknown>
 
