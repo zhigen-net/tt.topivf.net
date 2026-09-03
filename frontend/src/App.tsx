@@ -11,6 +11,8 @@ import TasksPage from '@/pages/tasks/TasksPage'
 import ProxiesPage from '@/pages/proxies/ProxiesPage'
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import McpPage from '@/pages/mcp/McpPage'
+import ProfilePage from '@/pages/profile/ProfilePage'
 import UsersPage from '@/pages/users/UsersPage'
 import { useMe } from '@/lib/auth'
 
@@ -47,9 +49,11 @@ export default function App() {
               <Route path="/workspace" element={<WorkspacePage />} />
               <Route path="/proxies" element={<ProxiesPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/mcp" element={<McpPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route element={<RequireAdmin />}>
                 <Route path="/users" element={<UsersPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>
           </Route>

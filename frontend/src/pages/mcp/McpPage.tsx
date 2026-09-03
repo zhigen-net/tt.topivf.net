@@ -29,8 +29,9 @@ const SCOPE_LABELS: Record<McpScope, { label: string; hint: string }> = {
 
 const ENDPOINT = `${window.location.origin}/api/v1/mcp`
 
-export function McpKeysCard() {
+export default function McpPage() {
   const qc = useQueryClient()
+  const { workspace, can } = useWorkspace()
   const [createOpen, setCreateOpen] = useState(false)
   const [issued, setIssued] = useState<{ apiKey: ApiKey; token: string } | null>(null)
   const [removing, setRemoving] = useState<ApiKey | null>(null)
@@ -54,34 +55,43 @@ export function McpKeysCard() {
   })
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="text-base">MCP 接入</CardTitle>
-            <CardDescription>
-              给 Claude 等 AI 客户端签发密钥，让它直接查账号、建作品、审核和发布
-            </CardDescription>
-          </div>
-          <Button size="sm" className="shrink-0" onClick={() => setCreateOpen(true)}>
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">MCP 服务</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            让 Claude 等 AI 客户端接入「{workspace?.name ?? '当前空间'}」，直接查账号、建作品、审核和发布
+          </p>
+        </div>
+        {can('member') && (
+          <Button className="shrink-0" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">新建密钥</span>
+            <span className="hidden sm:inline">新建服务</span>
           </Button>
-        </div>
-      </CardHeader>
+        )}
+      </div>
 
-      <CardContent className="space-y-3">
-        <div className="rounded-lg bg-muted/50 p-3 space-y-1.5">
-          <p className="text-xs text-muted-foreground">服务地址</p>
-          <CopyLine value={ENDPOINT} />
-        </div>
+      <div className="max-w-3xl space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">服务地址</CardTitle>
+            <CardDescription>空间内所有服务共用这个地址，靠各自的密钥区分身份与权限</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CopyLine value={ENDPOINT} />
+          </CardContent>
+        </Card>
 
         {isLoading ? (
-          <div className="h-14 rounded-lg border bg-muted/30 animate-pulse" />
+          <div className="h-24 animate-pulse rounded-lg border bg-muted/30" />
         ) : keys.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">还没有密钥</p>
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              还没有 MCP 服务。一个空间可以建多个，每个服务的密钥、账号范围和权限相互独立。
+            </CardContent>
+          </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {keys.map((k) => (
               <div key={k.id} className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -106,23 +116,25 @@ export function McpKeysCard() {
                   ))}
                 </div>
 
-                <div className="flex justify-end gap-2 border-t pt-2">
-                  {!k.revokedAt && (
-                    <Button variant="outline" size="sm" disabled={revoke.isPending} onClick={() => revoke.mutate(k.id)}>
-                      <Ban className="h-3.5 w-3.5" />
-                      吊销
+                {can('member') && (
+                  <div className="flex justify-end gap-2 border-t pt-2">
+                    {!k.revokedAt && (
+                      <Button variant="outline" size="sm" disabled={revoke.isPending} onClick={() => revoke.mutate(k.id)}>
+                        <Ban className="h-3.5 w-3.5" />
+                        吊销
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => setRemoving(k)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      删除
                     </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => setRemoving(k)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    删除
-                  </Button>
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-      </CardContent>
+      </div>
 
       <CreateKeyDrawer
         open={createOpen}
@@ -135,7 +147,7 @@ export function McpKeysCard() {
       {removing && (
         <Dialog open onOpenChange={(o) => !o && setRemoving(null)}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>删除密钥</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>删除服务</DialogTitle></DialogHeader>
             <p className="text-sm">删除「{removing.name}」后，正在使用它的客户端会立即失去访问权限。确定删除？</p>
             <DialogFooter>
               <Button variant="outline" onClick={() => setRemoving(null)} disabled={remove.isPending}>取消</Button>
@@ -146,7 +158,7 @@ export function McpKeysCard() {
           </DialogContent>
         </Dialog>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -217,14 +229,14 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
     <Drawer open={open} onOpenChange={(o) => !o && onClose()}>
       <DrawerContent>
         <DrawerHeader>
-          <DrawerTitle>新建 MCP 密钥</DrawerTitle>
-          <p className="mt-1 text-sm text-muted-foreground">一把密钥 = 空间 + 账号范围 + 权限范围</p>
+          <DrawerTitle>新建 MCP 服务</DrawerTitle>
+          <p className="mt-1 text-sm text-muted-foreground">一个服务 = 一把独立密钥 + 账号范围 + 权限范围</p>
         </DrawerHeader>
 
         <DrawerBody>
-          <Section step={1} title="基本信息" hint="密钥固定绑当前空间和你自己，AI 的操作都会记在你名下">
+          <Section step={1} title="基本信息" hint="服务固定绑当前空间和你自己，AI 的操作都会记在你名下">
             <div className="space-y-1.5">
-              <Label>名称</Label>
+              <Label>服务名称</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：Claude 桌面端" />
             </div>
             <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
@@ -301,7 +313,7 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
         <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-3 sm:px-6">
           <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>取消</Button>
           <Button onClick={() => mutation.mutate()} disabled={!valid || mutation.isPending}>
-            {mutation.isPending ? '创建中…' : '创建密钥'}
+            {mutation.isPending ? '创建中…' : '创建服务'}
           </Button>
         </div>
       </DrawerContent>
@@ -320,7 +332,7 @@ function IssuedTokenDialog({ issued, onClose }: {
   return (
     <Dialog open={Boolean(issued)} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>密钥已创建</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>服务已创建</DialogTitle></DialogHeader>
 
         <div className="space-y-4">
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">

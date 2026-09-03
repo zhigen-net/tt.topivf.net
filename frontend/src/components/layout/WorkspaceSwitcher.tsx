@@ -20,7 +20,10 @@ export function WorkspaceSwitcher() {
       <SelectTrigger className="h-9">
         <div className="flex min-w-0 items-center gap-2">
           <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <SelectValue />
+          {/* 不给 children 的话渲染的是选中项的全部子节点（含角色标签），240px 侧栏放不下 */}
+          <span className="min-w-0 truncate">
+            <SelectValue>{workspace.name}</SelectValue>
+          </span>
         </div>
       </SelectTrigger>
       <SelectContent>

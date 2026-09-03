@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  Users, FileVideo, CalendarClock, BarChart3, Settings, Globe, Wifi, LogOut,
-  LayoutDashboard, ShieldCheck, Building2, Images,
+  Users, FileVideo, BarChart3, Settings, Globe, Wifi, LogOut,
+  LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMe } from '@/lib/auth'
@@ -14,12 +14,12 @@ const nav = [
   { to: '/accounts', icon: Users, label: '账号管理' },
   { to: '/contents', icon: FileVideo, label: '作品管理' },
   { to: '/assets', icon: Images, label: '素材库' },
-  { to: '/tasks', icon: CalendarClock, label: '发布任务' },
   { to: '/analytics', icon: BarChart3, label: '数据分析' },
   { to: '/proxies', icon: Wifi, label: '代理管理' },
-  { to: '/workspace', icon: Building2, label: '空间设置' },
+  { to: '/mcp', icon: Plug, label: 'MCP 服务' },
+  { to: '/workspace', icon: Building2, label: '工作空间' },
   { to: '/users', icon: ShieldCheck, label: '用户管理', adminOnly: true },
-  { to: '/settings', icon: Settings, label: '设置' },
+  { to: '/settings', icon: Settings, label: '系统设置', adminOnly: true },
 ]
 
 export function Sidebar() {
@@ -63,12 +63,26 @@ export function Sidebar() {
       </nav>
       <div className="border-t p-3">
         {me && (
-          <div className="px-3 pb-2">
-            <p className="truncate text-sm font-medium">{me.displayName}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              @{me.username} · {workspace ? WORKSPACE_ROLE_LABELS[workspace.role] : '无空间'}
-            </p>
-          </div>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              cn(
+                'mb-1 flex items-center gap-2 rounded-md px-3 py-2 transition-colors',
+                isActive ? 'bg-accent' : 'hover:bg-accent',
+              )
+            }
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+              {me.displayName.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{me.displayName}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                @{me.username} · {workspace ? WORKSPACE_ROLE_LABELS[workspace.role] : '无空间'}
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </NavLink>
         )}
         <button
           onClick={logout}
