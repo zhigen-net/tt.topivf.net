@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { useAllAccounts } from '@/lib/accounts'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
@@ -98,7 +99,8 @@ export default function McpPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{k.name}</p>
-                    <p className="truncate font-mono text-xs text-muted-foreground">sh_{k.prefix}…</p>
+                    {/* Agent 侧的服务名，多服务并存时靠它对号入座 */}
+                    <p className="truncate font-mono text-xs text-muted-foreground">socialhub-{k.prefix}</p>
                   </div>
                   {keyStatus(k)}
                 </div>
@@ -317,73 +319,68 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   )
 }
 
-const TABS = [
-  { id: 'cli', label: '命令行' },
-  { id: 'json', label: '配置文件' },
-  { id: 'prompt', label: '提示词' },
-] as const
-
-type TabId = (typeof TABS)[number]['id']
-
 function IssuedTokenDialog({ issued, onClose }: {
   issued: { apiKey: ApiKey; token: string } | null
   onClose: () => void
 }) {
-  const [tab, setTab] = useState<TabId>('cli')
+  const { workspace } = useWorkspace()
+  const key = issued?.apiKey
   const token = issued?.token ?? ''
-  const name = issued?.apiKey.name ?? 'socialhub'
+  // 同一个 Agent 可能同时挂多个 SocialHub 服务，重名会互相覆盖，用密钥前缀保证唯一
+  const serverName = key ? `socialhub-${key.prefix}` : 'socialhub'
+  const scopeText = key?.accountIds ? `${key.accountIds.length} 个指定账号` : '空间内全部账号'
 
-  useEffect(() => { if (issued) setTab('cli') }, [issued])
-
-  const cli = `claude mcp add --transport http socialhub ${ENDPOINT} --header "Authorization: Bearer ${token}"`
+  const cli = `claude mcp add --transport http ${serverName} ${ENDPOINT} --header "Authorization: Bearer ${token}"`
   const config = JSON.stringify({
     mcpServers: {
-      socialhub: { type: 'http', url: ENDPOINT, headers: { Authorization: `Bearer ${token}` } },
+      [serverName]: { type: 'http', url: ENDPOINT, headers: { Authorization: `Bearer ${token}` } },
     },
   }, null, 2)
-  const prompt = buildPrompt(issued?.apiKey.scopes ?? [], name)
+  const prompt = buildPrompt({
+    serverName,
+    label: key?.name ?? '',
+    workspaceName: workspace?.name ?? '',
+    scopeText,
+    scopes: key?.scopes ?? [],
+  })
 
   return (
     <Dialog open={Boolean(issued)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-xl">
         <DialogHeader><DialogTitle>服务已创建</DialogTitle></DialogHeader>
 
-        <div className="space-y-4">
-          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            这是唯一一次能看到完整密钥的机会，关掉后就取不回来了。下面的命令和配置里已经带上了它。
-          </p>
+        <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          这是唯一一次能拿到完整密钥的机会，关掉后取不回来。下面三份物料里都已经带上了它。
+        </p>
 
-          <div className="space-y-1.5">
-            <Label>密钥</Label>
-            <CopyLine value={token} />
-          </div>
+        <dl className="rounded-md border text-sm">
+          <InfoRow label="服务名" value={serverName} mono />
+          <InfoRow label="工作空间" value={workspace?.name ?? '—'} />
+          <InfoRow label="账号范围" value={scopeText} />
+        </dl>
 
-          <div className="space-y-2">
-            <Label>接入方式</Label>
-            <div className="flex gap-2">
-              {TABS.map((t) => (
-                <ChoiceButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
-                  {t.label}
-                </ChoiceButton>
-              ))}
-            </div>
-
-            {tab === 'cli' && (
-              <CopyBlock hint="Claude Code / Codex 等命令行客户端，粘到终端执行即可" value={cli} />
-            )}
-            {tab === 'json' && (
-              <CopyBlock
-                hint="Claude Desktop、Cursor、Cline、Windsurf 等：把这段合并进它们的 MCP 配置文件"
-                value={config}
-              />
-            )}
-            {tab === 'prompt' && (
-              <CopyBlock
-                hint="贴进 Agent 的系统提示词 / 项目规则，内容已按这个服务的权限裁剪过"
-                value={prompt}
-              />
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label>复制接入物料</Label>
+          <CopyRow
+            title="密钥"
+            hint="只要密钥本身"
+            value={token}
+          />
+          <CopyRow
+            title="命令行"
+            hint="Claude Code 等 CLI，粘到终端执行"
+            value={cli}
+          />
+          <CopyRow
+            title="配置文件"
+            hint="Claude Desktop / Cursor / Cline 的 mcpServers 片段"
+            value={config}
+          />
+          <CopyRow
+            title="提示词"
+            hint="贴进 Agent 系统提示词，含服务名、权限与多服务隔离约定"
+            value={prompt}
+          />
         </div>
 
         <DialogFooter>
@@ -404,12 +401,27 @@ const SCOPE_TOOLS: Record<McpScope, string> = {
   'analytics:read': '- get_account_analytics：读某个账号的粉丝、互动历史快照',
 }
 
-/** 提示词按这把密钥实际拿到的权限裁剪，免得 Agent 去试它根本调不到的工具 */
-function buildPrompt(scopes: McpScope[], name: string): string {
+interface PromptInput {
+  serverName: string
+  label: string
+  workspaceName: string
+  scopeText: string
+  scopes: McpScope[]
+}
+
+/**
+ * 提示词按这把密钥实际拿到的权限裁剪，免得 Agent 去试它根本调不到的工具。
+ * 开头那段服务标识是给多服务场景用的：同一个 Agent 挂着几个空间的 SocialHub 时，
+ * 光看工具名分不出彼此，必须靠服务名把 id 的作用域框住。
+ */
+function buildPrompt({ serverName, label, workspaceName, scopeText, scopes }: PromptInput): string {
   const tools = MCP_SCOPES.filter((s) => scopes.includes(s)).map((s) => SCOPE_TOOLS[s]).join('\n')
+  const permissions = MCP_SCOPES.filter((s) => scopes.includes(s))
+    .map((s) => SCOPE_LABELS[s].label)
+    .join('、')
 
   const rules = [
-    '- 账号范围和权限都写死在密钥里。碰到 403 说明这把密钥没这个权限，直接告诉我，不要换参数重试。',
+    '- 账号范围和权限都写死在密钥里。碰到 403 说明这个服务没这个权限，直接告诉我，不要换参数重试。',
     '- 平台取值：tiktok、instagram、youtube、twitter、facebook；作品类型：video、image、reel、story。',
     '- 时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
     '- 作品 id、账号 id 都是 uuid，不要自己编，先用查询类工具拿到真实 id。',
@@ -422,21 +434,45 @@ function buildPrompt(scopes: McpScope[], name: string): string {
   }
 
   return [
-    `你已接入 SocialHub 社媒管理系统（MCP 服务「${name}」），可以代我管理社交账号的内容生产与发布。`,
+    `你已接入 SocialHub 社媒管理系统。以下说明只对 MCP 服务 ${serverName} 有效。`,
     '',
-    '工作流：作品必须依次经过 草稿 →（submit_content）待审核 →（review_content）已通过 →（publish_content）发布。跳步会被服务端拒绝。作品一旦被修改，审核结论作废、退回草稿，需要重新走一遍。',
+    '服务标识',
+    `- MCP 服务名：${serverName}`,
+    `- 服务地址：${ENDPOINT}`,
+    `- 用途备注：${label || '（未填写）'}`,
+    `- 工作空间：${workspaceName || '（未知）'}`,
+    `- 账号范围：${scopeText}`,
+    `- 已授予权限：${permissions || '（没有勾选任何权限）'}`,
     '',
-    '可用工具：',
-    tools || '（这把密钥没有勾选任何权限）',
+    '多服务隔离',
+    `- 我可能同时接入多个 SocialHub 服务，它们指向不同的工作空间或账号范围，数据互不相通。`,
+    `- 上面这些工具只能通过 ${serverName} 调用。别的 SocialHub 服务查到的作品 id、账号 id 拿到这里会直接 404，反之亦然，不要跨服务传递 id。`,
+    `- 同时用到多个服务时，回答里要标明每条数据出自哪个服务，不要把它们合并成一份统计。`,
     '',
-    '约束：',
+    '工作流',
+    '- 作品必须依次经过 草稿 →（submit_content）待审核 →（review_content）已通过 →（publish_content）发布，跳步会被服务端拒绝。',
+    '- 作品一旦被修改，审核结论作废、退回草稿，需要重新走一遍。',
+    '',
+    '可用工具',
+    tools || '（这个服务没有勾选任何权限）',
+    '',
+    '约束',
     ...rules,
     '',
     '用中文回话。账号名、粉丝数、发布时间一律照工具返回值转述，不要估算或补全。',
   ].join('\n')
 }
 
-function CopyBlock({ value, hint }: { value: string; hint: string }) {
+function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b px-3 py-2 last:border-0">
+      <dt className="shrink-0 text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn('min-w-0 truncate text-xs', mono && 'font-mono')}>{value}</dd>
+    </div>
+  )
+}
+
+function CopyRow({ title, hint, value }: { title: string; hint: string; value: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -450,18 +486,20 @@ function CopyBlock({ value, hint }: { value: string; hint: string }) {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{hint}</p>
-        <Button variant="outline" size="sm" className="shrink-0" onClick={copy}>
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? '已复制' : '复制'}
-        </Button>
-      </div>
-      <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-words">
-        {value}
-      </pre>
-    </div>
+    <button
+      type="button"
+      onClick={copy}
+      className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? '已复制' : '复制'}
+      </span>
+    </button>
   )
 }
 
@@ -480,7 +518,7 @@ function CopyLine({ value }: { value: string }) {
 
   return (
     <div className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">{value}</code>
+      <code className="min-w-0 flex-1 truncate font-mono text-xs">{value}</code>
       <button onClick={copy} title="复制" className="shrink-0 rounded p-1 hover:bg-accent">
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
