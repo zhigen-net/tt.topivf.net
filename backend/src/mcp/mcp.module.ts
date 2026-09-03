@@ -5,9 +5,10 @@ import { ContentsModule } from '../contents/contents.module'
 import { AccountsModule } from '../accounts/accounts.module'
 import { TasksModule } from '../tasks/tasks.module'
 import { AnalyticsModule } from '../analytics/analytics.module'
+import { AssetsModule } from '../assets/assets.module'
 
 @Module({
-  imports: [ContentsModule, AccountsModule, TasksModule, AnalyticsModule],
+  imports: [ContentsModule, AccountsModule, TasksModule, AnalyticsModule, AssetsModule],
   controllers: [McpController],
   providers: [McpService],
 })

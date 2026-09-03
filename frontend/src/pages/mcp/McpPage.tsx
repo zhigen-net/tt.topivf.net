@@ -20,6 +20,8 @@ import { MCP_SCOPES } from '@/types'
 import type { ApiKey, McpScope } from '@/types'
 
 const SCOPE_LABELS: Record<McpScope, { label: string; hint: string }> = {
+  'assets:read': { label: '查看素材库', hint: '列出已上传的图片和视频，拿到 id 挂给作品' },
+  'assets:write': { label: '导入素材', hint: '让服务器按公网链接下载文件存进素材库，内网地址会被拒绝' },
   'contents:read': { label: '查看作品', hint: '读取作品库、审核状态与发布情况' },
   'contents:write': { label: '创建 / 修改作品', hint: '新建草稿、改文案、提交审核' },
   'contents:review': { label: '审核作品', hint: 'AI 可以自行通过或驳回，相当于绕过人工审核' },
@@ -394,6 +396,8 @@ function IssuedTokenDialog({ issued, onClose }: {
 }
 
 const SCOPE_TOOLS: Record<McpScope, string> = {
+  'assets:read': '- list_assets：翻素材库，按类型/文件名筛，unused 只看没被作品用过的；返回的 id 就是 assetId',
+  'assets:write': '- import_asset_from_url：给一个公网直链，服务器把文件下下来存进素材库并返回 id',
   'contents:read': '- list_contents：分页查作品，可按关键词、平台、审核状态过滤\n- get_content：按 id 看单个作品详情',
   'contents:write': '- create_content：新建作品，落地即草稿\n- update_content：改作品；改动会让已有审核结论作废、退回草稿\n- submit_content：把草稿或被驳回的作品送去审核',
   'contents:review': '- review_content：approve 通过 / reject 驳回，驳回必须在 note 里写清理由',
@@ -404,6 +408,8 @@ const SCOPE_TOOLS: Record<McpScope, string> = {
 }
 
 const SCOPE_PROBE_TOOL: Record<McpScope, string> = {
+  'assets:read': 'list_assets',
+  'assets:write': 'import_asset_from_url',
   'contents:read': 'list_contents',
   'contents:write': 'create_content',
   'contents:review': 'review_content',
@@ -446,6 +452,15 @@ function buildPrompt({ serverName, cli, config, label, workspaceName, scopeText,
     '- 时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
     '- 作品 id、账号 id 都是 uuid，不要自己编，先用查询类工具拿到真实 id。',
   ]
+  if (scopes.includes('assets:read')) {
+    rules.push('- 作品的图片视频来自素材库，不要反过来问我要文件。先 list_assets 找现成的，把它的 id 填进 create_content 的 assetId（封面填 thumbnailAssetId）。')
+  }
+  if (scopes.includes('assets:write')) {
+    rules.push('- 库里没有合适的素材时，用 import_asset_from_url 给一个公网直链让服务器自己下。链接要能直接下到文件本身，不能是网盘或预览页。')
+  }
+  if (!scopes.includes('assets:read') && !scopes.includes('assets:write')) {
+    rules.push('- 这个服务没有素材库权限。需要配图配视频时，只能用 fileUrl 填公网直链，或者直接问我要。')
+  }
   if (scopes.includes('contents:review')) {
     rules.push('- 你有审核权限，等于绕过了人工把关。批准前先自查文案合规、素材可访问、平台设置正确。')
   }

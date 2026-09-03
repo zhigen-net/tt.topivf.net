@@ -6,6 +6,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { extname } from 'path'
 import { Asset, type AssetType } from './asset.entity'
 import { AssetStorageService } from './asset-storage.service'
+import { fetchRemoteFile } from './remote-fetch'
 import { QueryAssetsDto } from './dto/asset.dto'
 import { Content } from '../contents/content.entity'
 import type { User } from '../users/user.entity'
@@ -61,19 +62,35 @@ export class AssetsService {
   }
 
   async upload(file: Express.Multer.File, ws: WorkspaceContext, actor: User) {
-    const type = MIME_TYPES[file.mimetype]
-    if (!type) throw new BadRequestException(`不支持的文件类型：${file.mimetype}`)
+    return this.persist(file.buffer, file.originalname, file.mimetype, ws, actor)
+  }
+
+  /** 让服务器去拉一个外部地址，地址可能来自 AI，内网防护在 fetchRemoteFile 里 */
+  async importFromUrl(url: string, ws: WorkspaceContext, actor: User) {
+    const file = await fetchRemoteFile(url, ASSET_MAX_SIZE)
+    return this.persist(file.buffer, file.filename, file.mimeType, ws, actor)
+  }
+
+  private async persist(
+    buffer: Buffer,
+    filename: string,
+    mimeType: string,
+    ws: WorkspaceContext,
+    actor: User,
+  ) {
+    const type = MIME_TYPES[mimeType]
+    if (!type) throw new BadRequestException(`不支持的文件类型：${mimeType || '未知'}`)
 
     // 键带空间前缀，即便以后有代码漏了过滤，对象层面也不会混在一起
-    const objectKey = `${ws.id}/${randomUUID()}${extname(file.originalname).slice(0, 10)}`
-    await this.storage.put(objectKey, file.buffer, file.mimetype)
+    const objectKey = `${ws.id}/${randomUUID()}${extname(filename).slice(0, 10)}`
+    await this.storage.put(objectKey, buffer, mimeType)
 
     const asset = await this.repo.save(this.repo.create({
       workspaceId: ws.id,
       objectKey,
-      filename: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
+      filename,
+      mimeType,
+      size: buffer.length,
       type,
       uploadedById: actor.id,
       uploadedBy: actor.displayName,

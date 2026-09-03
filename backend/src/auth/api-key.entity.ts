@@ -6,6 +6,8 @@ import { User } from '../users/user.entity'
 import { Workspace } from '../workspaces/workspace.entity'
 
 export const MCP_SCOPES = [
+  'assets:read',
+  'assets:write',
   'contents:read',
   'contents:write',
   'contents:review',

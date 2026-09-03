@@ -145,6 +145,8 @@ export interface Stats {
 }
 
 export const MCP_SCOPES = [
+  'assets:read',
+  'assets:write',
   'contents:read',
   'contents:write',
   'contents:review',

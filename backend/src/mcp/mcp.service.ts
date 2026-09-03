@@ -7,6 +7,7 @@ import { ContentsService } from '../contents/contents.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { TasksService } from '../tasks/tasks.service'
 import { AnalyticsService } from '../analytics/analytics.service'
+import { AssetsService, type AssetView } from '../assets/assets.service'
 import { CONTENT_TYPES, PLATFORMS } from '../contents/dto/create-content.dto'
 import { REVIEW_STATUSES } from '../contents/dto/review-content.dto'
 import type { Account } from '../accounts/account.entity'
@@ -32,12 +33,15 @@ export class McpService {
     private readonly accounts: AccountsService,
     private readonly tasks: TasksService,
     private readonly analytics: AnalyticsService,
+    private readonly assets: AssetsService,
   ) {}
 
   build(ctx: McpContext): McpServer {
     const server = new McpServer(SERVER_INFO)
     const has = (scope: McpScope) => ctx.key.scopes.includes(scope)
 
+    if (has('assets:read')) this.registerAssetsRead(server, ctx)
+    if (has('assets:write')) this.registerAssetsWrite(server, ctx)
     if (has('contents:read')) this.registerContentsRead(server, ctx)
     if (has('contents:write')) this.registerContentsWrite(server, ctx)
     if (has('contents:review')) this.registerContentsReview(server, ctx)
@@ -47,6 +51,43 @@ export class McpService {
     if (has('analytics:read')) this.registerAnalyticsRead(server, ctx)
 
     return server
+  }
+
+  private registerAssetsRead(server: McpServer, { ws }: McpContext) {
+    server.registerTool('list_assets', {
+      title: '查询素材库',
+      description: '列出工作空间里已上传的图片和视频，拿到的 id 可以直接挂到作品的 assetId 上。',
+      inputSchema: {
+        type: z.enum(['video', 'image']).optional(),
+        search: z.string().max(200).optional().describe('文件名关键词'),
+        unused: z.boolean().optional().describe('只看还没有被任何作品引用的素材'),
+        page: z.number().int().min(1).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    }, async ({ unused, ...args }) => {
+      const res = await this.assets.findAll(ws, {
+        ...args,
+        limit: args.limit ?? 24,
+        unreferenced: unused ? 'true' : undefined,
+      })
+      return json({
+        total: res.total,
+        page: res.page,
+        totalPages: res.totalPages,
+        data: res.data.map(assetView),
+      })
+    })
+  }
+
+  private registerAssetsWrite(server: McpServer, { ws, user }: McpContext) {
+    server.registerTool('import_asset_from_url', {
+      title: '从链接导入素材',
+      description: '让服务器去下载一个公网上的图片或视频，存进素材库并返回 id。'
+        + '只支持 http/https 的公网地址，内网地址会被拒绝。',
+      inputSchema: {
+        url: z.string().url().describe('素材文件的公网直链，要能直接下到文件本身'),
+      },
+    }, async ({ url }) => json(assetView(await this.assets.importFromUrl(url, ws, user))))
   }
 
   private registerContentsRead(server: McpServer, { ws }: McpContext) {
@@ -88,8 +129,10 @@ export class McpService {
         platforms: z.array(z.enum(PLATFORMS)).min(1).describe('计划投放的平台'),
         caption: z.string().max(5000).optional().describe('正文文案'),
         hashtags: z.array(z.string().max(100)).optional(),
-        fileUrl: z.string().url().optional().describe('素材文件的 http(s) 地址'),
-        thumbnailUrl: z.string().url().optional(),
+        assetId: z.string().uuid().optional().describe('素材库里的正片 id，优先用它而不是 fileUrl'),
+        thumbnailAssetId: z.string().uuid().optional().describe('素材库里的封面 id'),
+        fileUrl: z.string().url().optional().describe('外链素材地址，没进素材库时才用'),
+        thumbnailUrl: z.string().url().optional().describe('外链封面地址'),
         duration: z.number().int().min(0).optional().describe('视频时长（秒）'),
       },
     }, async (args) => json(contentView(await this.contents.create(args, ws, user))))
@@ -104,6 +147,8 @@ export class McpService {
         platforms: z.array(z.enum(PLATFORMS)).min(1).optional(),
         caption: z.string().max(5000).optional(),
         hashtags: z.array(z.string().max(100)).optional(),
+        assetId: z.string().uuid().optional(),
+        thumbnailAssetId: z.string().uuid().optional(),
         fileUrl: z.string().url().optional(),
         thumbnailUrl: z.string().url().optional(),
         duration: z.number().int().min(0).optional(),
@@ -228,6 +273,20 @@ function accountView(a: Account) {
   }
 }
 
+// 不带 url：那是条带签名的直链，没必要留在 AI 的上下文里，挂作品只需要 id
+function assetView(a: AssetView) {
+  return {
+    id: a.id,
+    filename: a.filename,
+    type: a.type,
+    mimeType: a.mimeType,
+    size: a.size,
+    duration: a.duration,
+    referenced: a.referenced,
+    createdAt: a.createdAt,
+  }
+}
+
 function contentView(c: Content) {
   return {
     id: c.id,
@@ -236,6 +295,8 @@ function contentView(c: Content) {
     caption: c.caption ?? null,
     hashtags: c.hashtags,
     platforms: c.platforms,
+    assetId: c.assetId ?? null,
+    thumbnailAssetId: c.thumbnailAssetId ?? null,
     fileUrl: c.fileUrl ?? null,
     thumbnailUrl: c.thumbnailUrl ?? null,
     duration: c.duration ?? null,
