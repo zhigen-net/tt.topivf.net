@@ -11,11 +11,12 @@ import { ApiKeysService } from './api-keys.service'
 import { JwtAuthGuard } from './jwt-auth.guard'
 import { RolesGuard } from './roles.guard'
 import { UsersModule } from '../users/users.module'
+import { Account } from '../accounts/account.entity'
 
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([ApiKey]),
+    TypeOrmModule.forFeature([ApiKey, Account]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({

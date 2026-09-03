@@ -5,9 +5,11 @@ import { CreateAccountDto } from './dto/create-account.dto'
 import { UpdateAccountDto, UpdateStatusDto } from './dto/update-account.dto'
 import { QueryAccountsDto } from './dto/query-accounts.dto'
 import { PlatformsService } from '../platforms/platforms.service'
+import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../workspaces/workspace-context'
 
 @ApiTags('accounts')
 @ApiBearerAuth()
+@MinWorkspaceRole('viewer')
 @Controller('accounts')
 export class AccountsController {
   constructor(
@@ -16,38 +18,51 @@ export class AccountsController {
   ) {}
 
   @Get()
-  findAll(@Query() query: QueryAccountsDto) {
-    return this.svc.findAll(query)
+  findAll(@Query() query: QueryAccountsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.findAll(ws.id, query)
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.svc.findOne(id)
+  findOne(@Param('id') id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.findOne(id, ws.id)
   }
 
   @Post()
-  create(@Body() dto: CreateAccountDto) {
-    return this.svc.create(dto)
+  @MinWorkspaceRole('member')
+  create(@Body() dto: CreateAccountDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.create(dto, ws.id)
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
-    return this.svc.update(id, dto)
+  @MinWorkspaceRole('member')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccountDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    return this.svc.update(id, dto, ws.id)
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStatusDto) {
-    return this.svc.updateStatus(id, dto.status)
+  @MinWorkspaceRole('member')
+  updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStatusDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    return this.svc.updateStatus(id, dto.status, ws.id)
   }
 
   @Post(':id/sync')
-  sync(@Param('id') id: string) {
-    return this.svc.sync(id, this.platforms)
+  @MinWorkspaceRole('member')
+  sync(@Param('id') id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.sync(id, ws.id, this.platforms)
   }
 
   @Delete(':id')
+  @MinWorkspaceRole('manager')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id)
+  remove(@Param('id') id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.remove(id, ws.id)
   }
 }

@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button'
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog'
 import { McpKeysCard } from '@/components/settings/McpKeysCard'
 import { useMe } from '@/lib/auth'
+import { useWorkspace } from '@/lib/workspace'
 
 export default function SettingsPage() {
   const { me } = useMe()
+  const { can } = useWorkspace()
   const [passwordOpen, setPasswordOpen] = useState(false)
 
   return (
@@ -33,7 +35,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {me?.role === 'admin' && <McpKeysCard />}
+        {can('member') && <McpKeysCard />}
 
         <Card>
           <CardHeader>

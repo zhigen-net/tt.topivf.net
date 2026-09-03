@@ -4,7 +4,9 @@ import {
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { UsersService } from './users.service'
-import { ChangePasswordDto, CreateUserDto, ResetPasswordDto, UpdateUserDto } from './dto/user.dto'
+import {
+  ChangePasswordDto, CreateUserDto, ResetPasswordDto, UpdateProfileDto, UpdateUserDto,
+} from './dto/user.dto'
 import { Roles } from '../auth/roles.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
 import type { User } from './user.entity'
@@ -14,6 +16,11 @@ import type { User } from './user.entity'
 @Controller('users')
 export class UsersController {
   constructor(private readonly svc: UsersService) {}
+
+  @Patch('me')
+  updateProfile(@CurrentUser() me: User, @Body() dto: UpdateProfileDto) {
+    return this.svc.updateProfile(me.id, dto.displayName)
+  }
 
   @Patch('me/password')
   @HttpCode(HttpStatus.NO_CONTENT)

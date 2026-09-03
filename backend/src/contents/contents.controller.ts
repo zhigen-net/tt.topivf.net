@@ -6,76 +6,89 @@ import { UpdateContentDto } from './dto/update-content.dto'
 import { QueryContentsDto } from './dto/query-contents.dto'
 import { BulkIdsDto, BulkPlatformsDto } from './dto/bulk-contents.dto'
 import { BulkReviewDto, ReviewContentDto } from './dto/review-content.dto'
-import { Roles } from '../auth/roles.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
+import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../workspaces/workspace-context'
 import type { User } from '../users/user.entity'
 
 @ApiTags('contents')
 @ApiBearerAuth()
+@MinWorkspaceRole('viewer')
 @Controller('contents')
 export class ContentsController {
   constructor(private readonly svc: ContentsService) {}
 
   @Get()
-  findAll(@Query() query: QueryContentsDto) {
-    return this.svc.findAll(query)
+  findAll(@Query() query: QueryContentsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.findAll(ws.id, query)
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.findOne(id)
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.findOne(id, ws.id)
   }
 
   @Post()
-  create(@Body() dto: CreateContentDto, @CurrentUser() me: User) {
-    return this.svc.create(dto, me)
+  @MinWorkspaceRole('member')
+  create(@Body() dto: CreateContentDto, @CurrentWorkspace() ws: WorkspaceContext, @CurrentUser() me: User) {
+    return this.svc.create(dto, ws, me)
   }
 
   // 批量操作走 POST 子路径，否则会被 :id 上的 ParseUUIDPipe 拦掉
   @Post('bulk-delete')
-  bulkRemove(@Body() dto: BulkIdsDto, @CurrentUser() me: User) {
-    return this.svc.bulkRemove(dto.ids, me)
+  @MinWorkspaceRole('member')
+  bulkRemove(@Body() dto: BulkIdsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.bulkRemove(dto.ids, ws)
   }
 
   @Post('bulk-platforms')
-  bulkSetPlatforms(@Body() dto: BulkPlatformsDto, @CurrentUser() me: User) {
-    return this.svc.bulkSetPlatforms(dto.ids, dto.platforms, me)
+  @MinWorkspaceRole('member')
+  bulkSetPlatforms(@Body() dto: BulkPlatformsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.bulkSetPlatforms(dto.ids, dto.platforms, ws)
   }
 
   @Post('bulk-submit')
-  bulkSubmit(@Body() dto: BulkIdsDto, @CurrentUser() me: User) {
-    return this.svc.bulkSubmit(dto.ids, me)
+  @MinWorkspaceRole('member')
+  bulkSubmit(@Body() dto: BulkIdsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.bulkSubmit(dto.ids, ws)
   }
 
   @Post('bulk-review')
-  @Roles('admin')
-  bulkReview(@Body() dto: BulkReviewDto, @CurrentUser() me: User) {
-    return this.svc.bulkReview(dto.ids, dto.action, dto.note, me)
+  @MinWorkspaceRole('member')
+  bulkReview(@Body() dto: BulkReviewDto, @CurrentWorkspace() ws: WorkspaceContext, @CurrentUser() me: User) {
+    return this.svc.bulkReview(dto.ids, dto.action, dto.note, ws, me)
   }
 
   @Post(':id/submit')
-  submit(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() me: User) {
-    return this.svc.submit(id, me)
+  @MinWorkspaceRole('member')
+  submit(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.submit(id, ws)
   }
 
   @Post(':id/review')
-  @Roles('admin')
+  @MinWorkspaceRole('member')
   review(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ReviewContentDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
     @CurrentUser() me: User,
   ) {
-    return this.svc.review(id, dto.action, dto.note, me)
+    return this.svc.review(id, dto.action, dto.note, ws, me)
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContentDto, @CurrentUser() me: User) {
-    return this.svc.update(id, dto, me)
+  @MinWorkspaceRole('member')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateContentDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    return this.svc.update(id, dto, ws)
   }
 
   @Delete(':id')
+  @MinWorkspaceRole('member')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() me: User) {
-    return this.svc.remove(id, me)
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.remove(id, ws)
   }
 }

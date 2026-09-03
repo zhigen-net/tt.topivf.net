@@ -1,5 +1,5 @@
 import {
-  ArrayNotEmpty, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUrl, MaxLength, Min,
+  ArrayNotEmpty, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUrl, IsUUID, MaxLength, Min,
 } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import type { ContentType } from '../content.entity'
@@ -31,6 +31,17 @@ export class CreateContentDto {
   @IsOptional()
   @IsUrl(URL_RULES)
   thumbnailUrl?: string | null
+
+  // 素材库引用。与上面的外链二选一，存量作品全是外链，两条路都要留着
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsUUID('4')
+  assetId?: string | null
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsUUID('4')
+  thumbnailAssetId?: string | null
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()

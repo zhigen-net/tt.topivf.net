@@ -4,6 +4,40 @@ export type TaskStatus = 'pending' | 'running' | 'done' | 'failed'
 export type ContentType = 'video' | 'image' | 'reel' | 'story'
 export type ReviewStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 export type UserRole = 'admin' | 'user'
+export type WorkspaceRole = 'manager' | 'member' | 'viewer'
+export type AssetType = 'video' | 'image'
+
+export interface Workspace {
+  id: string
+  name: string
+  /** 当前登录用户在这个空间里的角色 */
+  role: WorkspaceRole
+  createdAt: string
+}
+
+export interface WorkspaceMember {
+  id: string
+  workspaceId: string
+  userId: string
+  user?: User
+  role: WorkspaceRole
+  createdAt: string
+}
+
+export interface Asset {
+  id: string
+  filename: string
+  mimeType: string
+  size: number
+  type: AssetType
+  duration: number | null
+  uploadedBy: string | null
+  createdAt: string
+  /** 已被作品引用的素材不能删 */
+  referenced: boolean
+  /** 带短时签名的直链，过期后要重新拉列表 */
+  url: string
+}
 
 export interface User {
   id: string
@@ -57,6 +91,8 @@ export interface Content {
   type: ContentType
   fileUrl?: string
   thumbnailUrl?: string
+  assetId?: string | null
+  thumbnailAssetId?: string | null
   caption?: string
   hashtags: string[]
   platforms: Platform[]
@@ -124,6 +160,7 @@ export interface ApiKey {
   id: string
   name: string
   prefix: string
+  workspaceId: string
   userId: string
   user?: User
   scopes: McpScope[]

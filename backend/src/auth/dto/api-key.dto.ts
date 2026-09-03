@@ -10,10 +10,6 @@ export class CreateApiKeyDto {
   @MaxLength(64)
   name: string
 
-  @ApiProperty({ description: '这把 key 以哪个用户的身份操作' })
-  @IsUUID()
-  userId: string
-
   @ApiProperty({ enum: MCP_SCOPES, isArray: true })
   @IsArray()
   @ArrayNotEmpty()

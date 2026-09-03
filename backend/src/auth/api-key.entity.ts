@@ -3,6 +3,7 @@ import {
 } from 'typeorm'
 import { Exclude } from 'class-transformer'
 import { User } from '../users/user.entity'
+import { Workspace } from '../workspaces/workspace.entity'
 
 export const MCP_SCOPES = [
   'contents:read',
@@ -32,6 +33,14 @@ export class ApiKey {
   @Column({ name: 'secret_hash' })
   secretHash: string
 
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId?: string
+
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace
+
+  // 签发人。密钥的能力上限跟着这个人在该空间里的角色走，他被移出空间即失效
   @Column({ name: 'user_id' })
   userId: string
 

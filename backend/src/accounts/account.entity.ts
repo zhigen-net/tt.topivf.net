@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn,
+  UpdateDateColumn, ManyToOne, JoinColumn, Index,
 } from 'typeorm'
 import { Exclude } from 'class-transformer'
 import { Proxy } from '../proxies/proxy.entity'
@@ -9,9 +9,13 @@ export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'faceboo
 export type AccountStatus = 'active' | 'inactive' | 'banned' | 'warming'
 
 @Entity('accounts')
+@Index(['workspaceId'])
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   id: string
+
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId?: string
 
   @Column({ type: 'enum', enum: ['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] })
   platform: Platform

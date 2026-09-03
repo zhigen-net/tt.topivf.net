@@ -1,10 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm'
+import {
+  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index,
+} from 'typeorm'
 import { Exclude } from 'class-transformer'
 
 @Entity('proxies')
+@Index(['workspaceId'])
 export class Proxy {
   @PrimaryGeneratedColumn('uuid')
   id: string
+
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId?: string
 
   @Column()
   host: string

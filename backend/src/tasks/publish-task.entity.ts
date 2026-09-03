@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  UpdateDateColumn, ManyToOne, JoinColumn,
+  UpdateDateColumn, ManyToOne, JoinColumn, Index,
 } from 'typeorm'
 import { Content } from '../contents/content.entity'
 import type { Platform } from '../accounts/account.entity'
@@ -16,9 +16,13 @@ export interface TaskResult {
 }
 
 @Entity('publish_tasks')
+@Index(['workspaceId'])
 export class PublishTask {
   @PrimaryGeneratedColumn('uuid')
   id: string
+
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId?: string
 
   @Column({ name: 'content_id' })
   contentId: string

@@ -20,7 +20,13 @@ export class McpController {
       return
     }
 
-    const server = this.mcp.build(req.apiKey, req.user)
+    // 签发人被移出空间、降为只读或空间被删，密钥立刻失去意义
+    if (!req.workspace || req.workspace.role === 'viewer') {
+      res.status(403).json(rpcError('该密钥的工作空间已失效，或签发人已无权在该空间操作'))
+      return
+    }
+
+    const server = this.mcp.build({ key: req.apiKey, user: req.user, ws: req.workspace })
     // 无状态模式：每个请求一套 server/transport，客户端不需要维持会话
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {

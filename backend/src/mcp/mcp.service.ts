@@ -12,10 +12,18 @@ import { REVIEW_STATUSES } from '../contents/dto/review-content.dto'
 import type { Account } from '../accounts/account.entity'
 import type { Content } from '../contents/content.entity'
 import type { PublishTask } from '../tasks/publish-task.entity'
+import type { WorkspaceContext } from '../workspaces/workspace-context'
 
 const SERVER_INFO = { name: 'socialhub', version: '1.0.0' }
 
 type ToolResult = { content: { type: 'text'; text: string }[] }
+
+/** 密钥的空间在签发时就钉死了，工具里的每次查询都要带上它 */
+export interface McpContext {
+  key: ApiKey
+  user: User
+  ws: WorkspaceContext
+}
 
 @Injectable()
 export class McpService {
@@ -26,22 +34,22 @@ export class McpService {
     private readonly analytics: AnalyticsService,
   ) {}
 
-  build(key: ApiKey, user: User): McpServer {
+  build(ctx: McpContext): McpServer {
     const server = new McpServer(SERVER_INFO)
-    const has = (scope: McpScope) => key.scopes.includes(scope)
+    const has = (scope: McpScope) => ctx.key.scopes.includes(scope)
 
-    if (has('contents:read')) this.registerContentsRead(server)
-    if (has('contents:write')) this.registerContentsWrite(server, user)
-    if (has('contents:review')) this.registerContentsReview(server, user)
-    if (has('accounts:read')) this.registerAccountsRead(server, key)
-    if (has('tasks:read')) this.registerTasksRead(server, key)
-    if (has('tasks:publish')) this.registerTasksPublish(server, key)
-    if (has('analytics:read')) this.registerAnalyticsRead(server, key)
+    if (has('contents:read')) this.registerContentsRead(server, ctx)
+    if (has('contents:write')) this.registerContentsWrite(server, ctx)
+    if (has('contents:review')) this.registerContentsReview(server, ctx)
+    if (has('accounts:read')) this.registerAccountsRead(server, ctx)
+    if (has('tasks:read')) this.registerTasksRead(server, ctx)
+    if (has('tasks:publish')) this.registerTasksPublish(server, ctx)
+    if (has('analytics:read')) this.registerAnalyticsRead(server, ctx)
 
     return server
   }
 
-  private registerContentsRead(server: McpServer) {
+  private registerContentsRead(server: McpServer, { ws }: McpContext) {
     server.registerTool('list_contents', {
       title: '查询作品',
       description: '按条件分页查询作品库，返回标题、平台、审核状态与发布情况。',
@@ -54,7 +62,7 @@ export class McpService {
         limit: z.number().int().min(1).max(100).optional(),
       },
     }, async (args) => {
-      const res = await this.contents.findAll(args)
+      const res = await this.contents.findAll(ws.id, args)
       return json({
         total: res.total,
         page: res.page,
@@ -67,10 +75,10 @@ export class McpService {
       title: '查看作品详情',
       description: '按 ID 读取单个作品的完整信息。',
       inputSchema: { id: z.string().uuid() },
-    }, async ({ id }) => json(contentView(await this.contents.findOne(id))))
+    }, async ({ id }) => json(contentView(await this.contents.findOne(id, ws.id))))
   }
 
-  private registerContentsWrite(server: McpServer, user: User) {
+  private registerContentsWrite(server: McpServer, { ws, user }: McpContext) {
     server.registerTool('create_content', {
       title: '创建作品',
       description: '新建一个作品，创建后处于草稿状态，需要先提交审核、通过后才能发布。',
@@ -84,7 +92,7 @@ export class McpService {
         thumbnailUrl: z.string().url().optional(),
         duration: z.number().int().min(0).optional().describe('视频时长（秒）'),
       },
-    }, async (args) => json(contentView(await this.contents.create(args, user))))
+    }, async (args) => json(contentView(await this.contents.create(args, ws, user))))
 
     server.registerTool('update_content', {
       title: '修改作品',
@@ -100,16 +108,16 @@ export class McpService {
         thumbnailUrl: z.string().url().optional(),
         duration: z.number().int().min(0).optional(),
       },
-    }, async ({ id, ...patch }) => json(contentView(await this.contents.update(id, patch, user))))
+    }, async ({ id, ...patch }) => json(contentView(await this.contents.update(id, patch, ws))))
 
     server.registerTool('submit_content', {
       title: '提交审核',
       description: '把草稿或被驳回的作品送去审核。',
       inputSchema: { id: z.string().uuid() },
-    }, async ({ id }) => json(contentView(await this.contents.submit(id, user))))
+    }, async ({ id }) => json(contentView(await this.contents.submit(id, ws))))
   }
 
-  private registerContentsReview(server: McpServer, user: User) {
+  private registerContentsReview(server: McpServer, { ws, user }: McpContext) {
     server.registerTool('review_content', {
       title: '审核作品',
       description: '通过或驳回一个待审核的作品。驳回时应给出理由。',
@@ -119,11 +127,11 @@ export class McpService {
         note: z.string().max(1000).optional().describe('驳回理由'),
       },
     }, async ({ id, action, note }) => (
-      json(contentView(await this.contents.review(id, action, note, user)))
+      json(contentView(await this.contents.review(id, action, note, ws, user)))
     ))
   }
 
-  private registerAccountsRead(server: McpServer, key: ApiKey) {
+  private registerAccountsRead(server: McpServer, { ws, key }: McpContext) {
     server.registerTool('list_accounts', {
       title: '查询社交账号',
       description: '列出这把密钥可操作的社交账号。返回值不含任何登录凭证。',
@@ -134,8 +142,8 @@ export class McpService {
       },
     }, async (args) => {
       const list = key.accountIds
-        ? await this.allowedAccounts(key.accountIds)
-        : (await this.accounts.findAll({ ...args, limit: 100 })).data
+        ? await this.accounts.findAllByIds(key.accountIds, ws.id)
+        : (await this.accounts.findAll(ws.id, { ...args, limit: 100 })).data
 
       const filtered = list.filter((a) => (
         (!args.platform || a.platform === args.platform)
@@ -146,7 +154,7 @@ export class McpService {
     })
   }
 
-  private registerTasksRead(server: McpServer, key: ApiKey) {
+  private registerTasksRead(server: McpServer, { ws, key }: McpContext) {
     server.registerTool('list_tasks', {
       title: '查询发布任务',
       description: '查看发布任务的排队、执行与结果情况。',
@@ -158,7 +166,7 @@ export class McpService {
       },
     }, async ({ page = 1, limit = 20, accountId, contentId }) => {
       if (accountId) this.assertAccountsAllowed(key, [accountId])
-      const res = await this.tasks.findAll(page, limit, accountId, contentId)
+      const res = await this.tasks.findAll(ws.id, page, limit, accountId, contentId)
       const visible = key.accountIds
         ? res.data.filter((t) => t.accountIds.some((id) => key.accountIds!.includes(id)))
         : res.data
@@ -166,7 +174,7 @@ export class McpService {
     })
   }
 
-  private registerTasksPublish(server: McpServer, key: ApiKey) {
+  private registerTasksPublish(server: McpServer, { ws, key }: McpContext) {
     server.registerTool('publish_content', {
       title: '发布作品',
       description: '把一个已通过审核的作品投放到指定账号。可以指定时间来定时发布。',
@@ -177,26 +185,22 @@ export class McpService {
       },
     }, async (args) => {
       this.assertAccountsAllowed(key, args.accountIds)
-      return json(taskView(await this.tasks.create(args)))
+      return json(taskView(await this.tasks.create(args, ws.id)))
     })
   }
 
-  private registerAnalyticsRead(server: McpServer, key: ApiKey) {
+  private registerAnalyticsRead(server: McpServer, { ws, key }: McpContext) {
     server.registerTool('get_account_analytics', {
       title: '查询账号数据趋势',
       description: '读取某个账号最近的粉丝、互动等历史快照。',
       inputSchema: { accountId: z.string().uuid() },
     }, async ({ accountId }) => {
       this.assertAccountsAllowed(key, [accountId])
-      return json(await this.analytics.getByAccount(accountId))
+      return json(await this.analytics.getByAccount(accountId, ws.id))
     })
   }
 
-  private allowedAccounts(ids: string[]): Promise<Account[]> {
-    return Promise.all(ids.map((id) => this.accounts.findOne(id)))
-  }
-
-  /** accountIds 为 null 表示不限账号；空数组表示一个都不许碰 */
+  /** accountIds 为 null 表示不限空间内账号；空数组表示一个都不许碰 */
   private assertAccountsAllowed(key: ApiKey, ids: string[]) {
     if (!key.accountIds) return
     const denied = ids.filter((id) => !key.accountIds!.includes(id))

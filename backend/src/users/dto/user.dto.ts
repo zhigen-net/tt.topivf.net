@@ -37,6 +37,14 @@ export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['usernam
   isActive?: boolean
 }
 
+export class UpdateProfileDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  displayName: string
+}
+
 export class ResetPasswordDto {
   @ApiProperty()
   @IsString()

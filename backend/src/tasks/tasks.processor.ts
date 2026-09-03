@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { PublishTask, TaskResult } from './publish-task.entity'
 import { AccountsService } from '../accounts/accounts.service'
+import { AssetsService } from '../assets/assets.service'
 import { PlatformsService } from '../platforms/platforms.service'
 import type { Platform } from '../accounts/account.entity'
 
@@ -16,6 +17,7 @@ export class TasksProcessor extends WorkerHost {
     @InjectRepository(PublishTask) private repo: Repository<PublishTask>,
     private accountsService: AccountsService,
     private platformsService: PlatformsService,
+    private assetsService: AssetsService,
   ) {
     super()
   }
@@ -32,11 +34,19 @@ export class TasksProcessor extends WorkerHost {
 
     await this.repo.update(taskId, { status: 'running' })
 
+    // 适配器只认 fileUrl；素材库的文件在这里临时换成一条签名直链
+    if (task.content.assetId) {
+      task.content.fileUrl = await this.assetsService.publicUrl(task.content.assetId)
+    }
+    if (task.content.thumbnailAssetId) {
+      task.content.thumbnailUrl = await this.assetsService.publicUrl(task.content.thumbnailAssetId)
+    }
+
     const results: TaskResult[] = []
 
     for (const accountId of task.accountIds) {
       try {
-        const account = await this.accountsService.findOne(accountId)
+        const account = await this.accountsService.findById(accountId)
         const adapter = this.platformsService.getAdapter(account.platform)
 
         if (!adapter) {

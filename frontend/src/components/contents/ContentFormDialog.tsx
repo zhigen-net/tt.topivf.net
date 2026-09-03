@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AssetPicker } from '@/components/assets/AssetPicker'
 import { api } from '@/lib/api'
 import { contentTypeLabel, platformLabel, allPlatforms, allContentTypes } from './constants'
 import type { Content, ContentType, Platform } from '@/types'
@@ -20,6 +21,8 @@ interface Props {
 interface FormState {
   title: string
   type: ContentType
+  assetId: string | null
+  thumbnailAssetId: string | null
   fileUrl: string
   thumbnailUrl: string
   caption: string
@@ -30,6 +33,8 @@ interface FormState {
 const EMPTY: FormState = {
   title: '',
   type: 'video',
+  assetId: null,
+  thumbnailAssetId: null,
   fileUrl: '',
   thumbnailUrl: '',
   caption: '',
@@ -98,14 +103,30 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>文件地址</Label>
-            <Input placeholder="https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
-            <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
+            <Label>作品文件</Label>
+            <AssetPicker
+              value={form.assetId}
+              onChange={(a) => set('assetId', a?.id ?? null)}
+              type={form.type === 'image' ? 'image' : 'video'}
+            />
+            {!form.assetId && (
+              <>
+                <Input placeholder="或填外链 https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
+                <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
+              </>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <Label>封面地址 <span className="text-muted-foreground">（选填）</span></Label>
-            <Input placeholder="https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
+            <Label>封面 <span className="text-muted-foreground">（选填）</span></Label>
+            <AssetPicker
+              value={form.thumbnailAssetId}
+              onChange={(a) => set('thumbnailAssetId', a?.id ?? null)}
+              type="image"
+            />
+            {!form.thumbnailAssetId && (
+              <Input placeholder="或填外链 https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -158,6 +179,8 @@ function toForm(c: Content): FormState {
   return {
     title: c.title,
     type: c.type,
+    assetId: c.assetId ?? null,
+    thumbnailAssetId: c.thumbnailAssetId ?? null,
     fileUrl: c.fileUrl ?? '',
     thumbnailUrl: c.thumbnailUrl ?? '',
     caption: c.caption ?? '',
@@ -171,8 +194,10 @@ function toPayload(form: FormState) {
     title: form.title.trim(),
     type: form.type,
     // 清空要传 null，传 undefined 会被 JSON 直接丢掉，编辑时改动就静默失效了
-    fileUrl: form.fileUrl.trim() || null,
-    thumbnailUrl: form.thumbnailUrl.trim() || null,
+    assetId: form.assetId,
+    thumbnailAssetId: form.thumbnailAssetId,
+    fileUrl: form.assetId ? null : form.fileUrl.trim() || null,
+    thumbnailUrl: form.thumbnailAssetId ? null : form.thumbnailUrl.trim() || null,
     caption: form.caption.trim() || null,
     hashtags: form.hashtags.split(/[\s,]+/).filter(Boolean).map((h) => h.replace(/^#/, '')),
     platforms: form.platforms,

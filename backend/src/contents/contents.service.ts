@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm'
 import { In, Repository } from 'typeorm'
 import { Content } from './content.entity'
+import { Asset } from '../assets/asset.entity'
+import { AssetsService } from '../assets/assets.service'
 import { PublishTask } from '../tasks/publish-task.entity'
 import { CreateContentDto } from './dto/create-content.dto'
 import { UpdateContentDto } from './dto/update-content.dto'
@@ -9,6 +11,7 @@ import { QueryContentsDto } from './dto/query-contents.dto'
 import type { ReviewAction } from './dto/review-content.dto'
 import type { Platform } from '../accounts/account.entity'
 import type { User } from '../users/user.entity'
+import type { WorkspaceContext } from '../workspaces/workspace-context'
 
 export interface PublishSummary {
   taskCount: number
@@ -24,12 +27,14 @@ export class ContentsService {
   constructor(
     @InjectRepository(Content) private repo: Repository<Content>,
     @InjectRepository(PublishTask) private tasks: Repository<PublishTask>,
+    @InjectRepository(Asset) private assets: Repository<Asset>,
+    private readonly assetsService: AssetsService,
   ) {}
 
-  async findAll(query: QueryContentsDto) {
+  async findAll(workspaceId: string, query: QueryContentsDto) {
     const { search, type, platform, reviewStatus, sort = 'createdAt', order = 'DESC', page = 1, limit = 20 } = query
 
-    const qb = this.repo.createQueryBuilder('c')
+    const qb = this.repo.createQueryBuilder('c').where('c.workspaceId = :workspaceId', { workspaceId })
     if (search) {
       qb.andWhere('(c.title ILIKE :search OR c.caption ILIKE :search)', { search: `%${search}%` })
     }
@@ -44,9 +49,15 @@ export class ContentsService {
       .getManyAndCount()
 
     const summaries = await this.publishSummaries(data.map((c) => c.id))
+    // 挂了素材库封面的作品没有 thumbnailUrl，列表拿签名直链补上，前端就不用分两种情况渲染
+    const thumbs = await this.assetsService.signedUrlsFor(
+      data.map((c) => c.thumbnailAssetId).filter((id): id is string => !!id),
+    )
 
     return {
-      data: data.map((c) => Object.assign(c, summaries.get(c.id) ?? emptySummary())),
+      data: data.map((c) => Object.assign(c, summaries.get(c.id) ?? emptySummary(), {
+        thumbnailUrl: c.thumbnailUrl ?? (c.thumbnailAssetId ? thumbs.get(c.thumbnailAssetId) : undefined),
+      })),
       total,
       page,
       limit,
@@ -54,45 +65,47 @@ export class ContentsService {
     }
   }
 
-  async findOne(id: string) {
-    const item = await this.repo.findOneBy({ id })
+  async findOne(id: string, workspaceId: string) {
+    const item = await this.repo.findOneBy({ id, workspaceId })
     if (!item) throw new NotFoundException(`Content ${id} not found`)
     return item
   }
 
-  async create(dto: CreateContentDto, actor: User) {
+  async create(dto: CreateContentDto, ws: WorkspaceContext, actor: User) {
+    await this.assertAssetsInWorkspace(dto, ws.id)
     return this.repo.save(this.repo.create({
       ...toEntity(dto),
       hashtags: dto.hashtags ?? [],
       reviewStatus: 'draft',
+      workspaceId: ws.id,
       createdById: actor.id,
       createdBy: actor.displayName,
     }))
   }
 
-  async update(id: string, dto: UpdateContentDto, actor: User) {
-    const content = await this.findOne(id)
-    this.assertCanEdit(content, actor)
+  async update(id: string, dto: UpdateContentDto, ws: WorkspaceContext) {
+    const content = await this.findOne(id, ws.id)
+    await this.assertAssetsInWorkspace(dto, ws.id)
     await this.repo.update(id, { ...toEntity(dto), ...resetReview(content) })
-    return this.findOne(id)
+    return this.findOne(id, ws.id)
   }
 
-  async remove(id: string, actor: User) {
-    const content = await this.findOne(id)
-    this.assertCanEdit(content, actor)
+  async remove(id: string, ws: WorkspaceContext) {
+    const content = await this.findOne(id, ws.id)
+    await this.assertCanDelete(content, ws)
     await this.repo.delete(id)
   }
 
-  async bulkRemove(ids: string[], actor: User) {
-    const items = await this.repo.findBy({ id: In(ids) })
-    for (const c of items) this.assertCanEdit(c, actor)
+  async bulkRemove(ids: string[], ws: WorkspaceContext) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId: ws.id })
+    for (const c of items) await this.assertCanDelete(c, ws)
+    if (!items.length) return { deleted: 0 }
     const res = await this.repo.delete(items.map((c) => c.id))
     return { deleted: res.affected ?? 0 }
   }
 
-  async bulkSetPlatforms(ids: string[], platforms: Platform[], actor: User) {
-    const items = await this.repo.findBy({ id: In(ids) })
-    for (const c of items) this.assertCanEdit(c, actor)
+  async bulkSetPlatforms(ids: string[], platforms: Platform[], ws: WorkspaceContext) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId: ws.id })
     let updated = 0
     for (const c of items) {
       await this.repo.update(c.id, { platforms, ...resetReview(c) })
@@ -102,9 +115,8 @@ export class ContentsService {
   }
 
   /** 草稿或被驳回的作品送去审核 */
-  async submit(id: string, actor: User) {
-    const content = await this.findOne(id)
-    this.assertCanEdit(content, actor)
+  async submit(id: string, ws: WorkspaceContext) {
+    const content = await this.findOne(id, ws.id)
     if (content.reviewStatus === 'pending') throw new BadRequestException('已经在审核中了')
     if (content.reviewStatus === 'approved') throw new BadRequestException('已经审核通过，无需重复提交')
 
@@ -112,20 +124,19 @@ export class ContentsService {
       reviewStatus: 'pending',
       ...CLEAR_REVIEW,
     })
-    return this.findOne(id)
+    return this.findOne(id, ws.id)
   }
 
-  async review(id: string, action: ReviewAction, note: string | undefined, actor: User) {
-    const content = await this.findOne(id)
+  async review(id: string, action: ReviewAction, note: string | undefined, ws: WorkspaceContext, actor: User) {
+    const content = await this.findOne(id, ws.id)
     if (content.reviewStatus !== 'pending') throw new BadRequestException('只有待审核的作品可以审核')
     await this.applyReview([content.id], action, note, actor)
-    return this.findOne(id)
+    return this.findOne(id, ws.id)
   }
 
-  async bulkSubmit(ids: string[], actor: User) {
-    const items = await this.repo.findBy({ id: In(ids) })
+  async bulkSubmit(ids: string[], ws: WorkspaceContext) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId: ws.id })
     const usable = items.filter((c) => c.reviewStatus === 'draft' || c.reviewStatus === 'rejected')
-    for (const c of usable) this.assertCanEdit(c, actor)
     if (usable.length > 0) {
       await this.repo.update(usable.map((c) => c.id), {
         reviewStatus: 'pending',
@@ -137,8 +148,8 @@ export class ContentsService {
     return { submitted: usable.length, skipped: items.length - usable.length }
   }
 
-  async bulkReview(ids: string[], action: ReviewAction, note: string | undefined, actor: User) {
-    const items = await this.repo.findBy({ id: In(ids) })
+  async bulkReview(ids: string[], action: ReviewAction, note: string | undefined, ws: WorkspaceContext, actor: User) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId: ws.id })
     const usable = items.filter((c) => c.reviewStatus === 'pending')
     await this.applyReview(usable.map((c) => c.id), action, note, actor)
     return { reviewed: usable.length, skipped: items.length - usable.length }
@@ -154,10 +165,28 @@ export class ContentsService {
     } as Partial<Content>)
   }
 
-  /** 普通用户只能动自己建的作品；没有归属的历史数据只有管理员能动 */
-  private assertCanEdit(content: Content, actor: User) {
-    if (actor.role === 'admin') return
-    if (content.createdById !== actor.id) throw new ForbiddenException('只能操作自己创建的作品')
+  /** 素材 id 来自请求体，不验一遍就能把别的空间的素材挂到自己作品上 */
+  private async assertAssetsInWorkspace(dto: CreateContentDto | UpdateContentDto, workspaceId: string) {
+    const ids = [dto.assetId, dto.thumbnailAssetId].filter((id): id is string => !!id)
+    if (!ids.length) return
+    const found = await this.assets.countBy({ id: In([...new Set(ids)]), workspaceId })
+    if (found !== new Set(ids).size) {
+      throw new NotFoundException('素材不存在或不属于当前工作空间')
+    }
+  }
+
+  /**
+   * 成员只能删草稿和被驳回的作品，且不能已被发布任务引用过——
+   * 删掉进过审核流或已发出去的作品会让审核记录和发布记录断链。
+   */
+  private async assertCanDelete(content: Content, ws: WorkspaceContext) {
+    if (ws.role === 'manager') return
+    if (content.reviewStatus !== 'draft' && content.reviewStatus !== 'rejected') {
+      throw new ForbiddenException('只有草稿和已驳回的作品可以由成员删除')
+    }
+    if (await this.tasks.existsBy({ contentId: content.id })) {
+      throw new ForbiddenException('作品已被发布任务引用，需空间管理员删除')
+    }
   }
 
   /** 一次性把整页作品的发布情况聚合出来，避免每张卡片各查一次 */

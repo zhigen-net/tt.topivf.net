@@ -5,12 +5,14 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { ApiKeysService } from './api-keys.service'
 import { CreateApiKeyDto } from './dto/api-key.dto'
 import { MCP_SCOPES } from './api-key.entity'
-import { Roles } from './roles.decorator'
+import { CurrentUser } from './current-user.decorator'
+import type { User } from '../users/user.entity'
+import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../workspaces/workspace-context'
 
 @ApiTags('api-keys')
 @ApiBearerAuth()
 @Controller('api-keys')
-@Roles('admin')
+@MinWorkspaceRole('member')
 export class ApiKeysController {
   constructor(private readonly svc: ApiKeysService) {}
 
@@ -20,23 +22,35 @@ export class ApiKeysController {
   }
 
   @Get()
-  findAll() {
-    return this.svc.findAll()
+  findAll(@CurrentWorkspace() ws: WorkspaceContext, @CurrentUser() actor: User) {
+    return this.svc.findAll(ws, actor)
   }
 
   @Post()
-  create(@Body() dto: CreateApiKeyDto) {
-    return this.svc.create(dto)
+  create(
+    @Body() dto: CreateApiKeyDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @CurrentUser() actor: User,
+  ) {
+    return this.svc.create(dto, ws, actor)
   }
 
   @Post(':id/revoke')
-  revoke(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.revoke(id)
+  revoke(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @CurrentUser() actor: User,
+  ) {
+    return this.svc.revoke(id, ws, actor)
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.remove(id)
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentWorkspace() ws: WorkspaceContext,
+    @CurrentUser() actor: User,
+  ) {
+    return this.svc.remove(id, ws, actor)
   }
 }

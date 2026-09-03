@@ -9,11 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { api } from '@/lib/api'
+import { useMe } from '@/lib/auth'
+import { useWorkspace } from '@/lib/workspace'
+import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 import { MCP_SCOPES } from '@/types'
-import type { Account, ApiKey, McpScope, PaginatedResponse, User } from '@/types'
+import type { Account, ApiKey, McpScope, PaginatedResponse } from '@/types'
 
 const SCOPE_LABELS: Record<McpScope, { label: string; hint: string }> = {
   'contents:read': { label: '查看作品', hint: '读取作品库、审核状态与发布情况' },
@@ -91,7 +93,7 @@ export function McpKeysCard() {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  身份 {k.user?.displayName ?? '—'} · 账号 {k.accountIds ? `${k.accountIds.length} 个` : '不限'}
+                  签发人 {k.user?.displayName ?? '—'} · 账号 {k.accountIds ? `${k.accountIds.length} 个` : '不限'}
                   {' · '}权限 {k.scopes.length} 项
                   {' · '}{k.lastUsedAt ? `最近使用 ${formatTime(k.lastUsedAt)}` : '从未使用'}
                 </p>
@@ -154,19 +156,14 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   onIssued: (r: { apiKey: ApiKey; token: string }) => void
 }) {
   const qc = useQueryClient()
+  const { me } = useMe()
+  const { workspace, role } = useWorkspace()
   const [name, setName] = useState('')
-  const [userId, setUserId] = useState('')
   const [allAccounts, setAllAccounts] = useState(true)
   const [accountIds, setAccountIds] = useState<string[]>([])
   const [scopes, setScopes] = useState<McpScope[]>(['contents:read', 'accounts:read', 'tasks:read'])
   const [expiresAt, setExpiresAt] = useState('')
   const [search, setSearch] = useState('')
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => api.get<User[]>('/users').then((r) => r.data),
-    enabled: open,
-  })
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts', 'all'],
@@ -178,7 +175,6 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   useEffect(() => {
     if (!open) return
     setName('')
-    setUserId('')
     setAllAccounts(true)
     setAccountIds([])
     setScopes(['contents:read', 'accounts:read', 'tasks:read'])
@@ -197,7 +193,6 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   const mutation = useMutation({
     mutationFn: () => api.post<{ apiKey: ApiKey; token: string }>('/api-keys', {
       name: name.trim(),
-      userId,
       scopes,
       accountIds: allAccounts ? null : accountIds,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
@@ -208,9 +203,7 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
     },
   })
 
-  const selectedUser = users.find((u) => u.id === userId)
-  const valid = name.trim().length > 0 && userId !== '' && scopes.length > 0
-    && (allAccounts || accountIds.length > 0)
+  const valid = name.trim().length > 0 && scopes.length > 0 && (allAccounts || accountIds.length > 0)
 
   function toggleScope(s: McpScope) {
     setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -225,32 +218,19 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>新建 MCP 密钥</DrawerTitle>
-          <p className="mt-1 text-sm text-muted-foreground">一把密钥 = 身份 + 账号范围 + 权限范围</p>
+          <p className="mt-1 text-sm text-muted-foreground">一把密钥 = 空间 + 账号范围 + 权限范围</p>
         </DrawerHeader>
 
         <DrawerBody>
-          <Section step={1} title="身份" hint="AI 的操作会记在这个用户名下，也受这个用户的角色限制">
+          <Section step={1} title="基本信息" hint="密钥固定绑当前空间和你自己，AI 的操作都会记在你名下">
             <div className="space-y-1.5">
               <Label>名称</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：Claude 桌面端" />
             </div>
-            <div className="space-y-1.5">
-              <Label>绑定用户</Label>
-              <Select value={userId} onValueChange={setUserId}>
-                <SelectTrigger><SelectValue placeholder="选择一个用户" /></SelectTrigger>
-                <SelectContent>
-                  {users.filter((u) => u.isActive).map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.displayName}（{u.role === 'admin' ? '管理员' : '普通用户'}）
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedUser?.role !== 'admin' && userId !== '' && (
-                <p className="text-xs text-muted-foreground">
-                  普通用户只能改自己创建的作品，即使勾了审核权限也审不了别人的
-                </p>
-              )}
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              所属空间 <span className="text-foreground">{workspace?.name ?? '—'}</span>
+              {' · '}身份 <span className="text-foreground">{me?.displayName ?? '—'}</span>
+              {role && `（${WORKSPACE_ROLE_LABELS[role]}）`}
             </div>
             <div className="space-y-1.5">
               <Label>过期时间（可选）</Label>

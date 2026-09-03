@@ -6,6 +6,7 @@ import { TasksController } from './tasks.controller'
 import { TasksService } from './tasks.service'
 import { TasksProcessor } from './tasks.processor'
 import { AccountsModule } from '../accounts/accounts.module'
+import { AssetsModule } from '../assets/assets.module'
 import { Content } from '../contents/content.entity'
 import { Account } from '../accounts/account.entity'
 
@@ -14,6 +15,7 @@ import { Account } from '../accounts/account.entity'
     TypeOrmModule.forFeature([PublishTask, Content, Account]),
     BullModule.registerQueue({ name: 'publish' }),
     AccountsModule,
+    AssetsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService, TasksProcessor],

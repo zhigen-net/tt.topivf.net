@@ -1,4 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm'
+import {
+  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index,
+} from 'typeorm'
 import type { Platform } from '../accounts/account.entity'
 
 export type ContentType = 'video' | 'image' | 'reel' | 'story'
@@ -7,15 +9,26 @@ export type ContentType = 'video' | 'image' | 'reel' | 'story'
 export type ReviewStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 
 @Entity('contents')
+@Index(['workspaceId'])
 export class Content {
   @PrimaryGeneratedColumn('uuid')
   id: string
+
+  @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
+  workspaceId?: string
 
   @Column()
   title: string
 
   @Column({ type: 'enum', enum: ['video', 'image', 'reel', 'story'] })
   type: ContentType
+
+  // 素材库引用；与下面的外链字段二选一，存量作品全是外链，两条路都要保留
+  @Column({ name: 'asset_id', type: 'uuid', nullable: true })
+  assetId?: string
+
+  @Column({ name: 'thumbnail_asset_id', type: 'uuid', nullable: true })
+  thumbnailAssetId?: string
 
   @Column({ name: 'file_url', nullable: true })
   fileUrl?: string
