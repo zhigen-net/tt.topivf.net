@@ -1,10 +1,10 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { JwtService } from '@nestjs/jwt'
-import type { Request } from 'express'
 import { IS_PUBLIC_KEY } from './public.decorator'
+import { ApiKeysService } from './api-keys.service'
 import { UsersService } from '../users/users.service'
-import type { User } from '../users/user.entity'
+import type { AuthRequest } from './auth-request'
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -12,6 +12,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
     private readonly users: UsersService,
+    private readonly apiKeys: ApiKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -21,9 +22,17 @@ export class JwtAuthGuard implements CanActivate {
     ])
     if (isPublic) return true
 
-    const req = context.switchToHttp().getRequest<Request & { user?: User }>()
+    const req = context.switchToHttp().getRequest<AuthRequest>()
     const [scheme, token] = req.headers.authorization?.split(' ') ?? []
     if (scheme !== 'Bearer' || !token) throw new UnauthorizedException('Missing bearer token')
+
+    if (token.startsWith('sh_')) {
+      const resolved = await this.apiKeys.resolve(token)
+      if (!resolved) throw new UnauthorizedException('API Key 无效、已吊销或已过期')
+      req.user = resolved.user
+      req.apiKey = resolved.apiKey
+      return true
+    }
 
     let sub: string
     try {

@@ -1,0 +1,259 @@
+import { ForbiddenException, Injectable } from '@nestjs/common'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod'
+import type { ApiKey, McpScope } from '../auth/api-key.entity'
+import type { User } from '../users/user.entity'
+import { ContentsService } from '../contents/contents.service'
+import { AccountsService } from '../accounts/accounts.service'
+import { TasksService } from '../tasks/tasks.service'
+import { AnalyticsService } from '../analytics/analytics.service'
+import { CONTENT_TYPES, PLATFORMS } from '../contents/dto/create-content.dto'
+import { REVIEW_STATUSES } from '../contents/dto/review-content.dto'
+import type { Account } from '../accounts/account.entity'
+import type { Content } from '../contents/content.entity'
+import type { PublishTask } from '../tasks/publish-task.entity'
+
+const SERVER_INFO = { name: 'socialhub', version: '1.0.0' }
+
+type ToolResult = { content: { type: 'text'; text: string }[] }
+
+@Injectable()
+export class McpService {
+  constructor(
+    private readonly contents: ContentsService,
+    private readonly accounts: AccountsService,
+    private readonly tasks: TasksService,
+    private readonly analytics: AnalyticsService,
+  ) {}
+
+  build(key: ApiKey, user: User): McpServer {
+    const server = new McpServer(SERVER_INFO)
+    const has = (scope: McpScope) => key.scopes.includes(scope)
+
+    if (has('contents:read')) this.registerContentsRead(server)
+    if (has('contents:write')) this.registerContentsWrite(server, user)
+    if (has('contents:review')) this.registerContentsReview(server, user)
+    if (has('accounts:read')) this.registerAccountsRead(server, key)
+    if (has('tasks:read')) this.registerTasksRead(server, key)
+    if (has('tasks:publish')) this.registerTasksPublish(server, key)
+    if (has('analytics:read')) this.registerAnalyticsRead(server, key)
+
+    return server
+  }
+
+  private registerContentsRead(server: McpServer) {
+    server.registerTool('list_contents', {
+      title: '查询作品',
+      description: '按条件分页查询作品库，返回标题、平台、审核状态与发布情况。',
+      inputSchema: {
+        search: z.string().max(200).optional().describe('标题或文案关键词'),
+        type: z.enum(CONTENT_TYPES).optional(),
+        platform: z.enum(PLATFORMS).optional(),
+        reviewStatus: z.enum(REVIEW_STATUSES).optional(),
+        page: z.number().int().min(1).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    }, async (args) => {
+      const res = await this.contents.findAll(args)
+      return json({
+        total: res.total,
+        page: res.page,
+        totalPages: res.totalPages,
+        data: res.data.map(contentView),
+      })
+    })
+
+    server.registerTool('get_content', {
+      title: '查看作品详情',
+      description: '按 ID 读取单个作品的完整信息。',
+      inputSchema: { id: z.string().uuid() },
+    }, async ({ id }) => json(contentView(await this.contents.findOne(id))))
+  }
+
+  private registerContentsWrite(server: McpServer, user: User) {
+    server.registerTool('create_content', {
+      title: '创建作品',
+      description: '新建一个作品，创建后处于草稿状态，需要先提交审核、通过后才能发布。',
+      inputSchema: {
+        title: z.string().max(200),
+        type: z.enum(CONTENT_TYPES),
+        platforms: z.array(z.enum(PLATFORMS)).min(1).describe('计划投放的平台'),
+        caption: z.string().max(5000).optional().describe('正文文案'),
+        hashtags: z.array(z.string().max(100)).optional(),
+        fileUrl: z.string().url().optional().describe('素材文件的 http(s) 地址'),
+        thumbnailUrl: z.string().url().optional(),
+        duration: z.number().int().min(0).optional().describe('视频时长（秒）'),
+      },
+    }, async (args) => json(contentView(await this.contents.create(args, user))))
+
+    server.registerTool('update_content', {
+      title: '修改作品',
+      description: '修改作品内容。注意：改动会让已有的审核结论作废、作品退回草稿状态。',
+      inputSchema: {
+        id: z.string().uuid(),
+        title: z.string().max(200).optional(),
+        type: z.enum(CONTENT_TYPES).optional(),
+        platforms: z.array(z.enum(PLATFORMS)).min(1).optional(),
+        caption: z.string().max(5000).optional(),
+        hashtags: z.array(z.string().max(100)).optional(),
+        fileUrl: z.string().url().optional(),
+        thumbnailUrl: z.string().url().optional(),
+        duration: z.number().int().min(0).optional(),
+      },
+    }, async ({ id, ...patch }) => json(contentView(await this.contents.update(id, patch, user))))
+
+    server.registerTool('submit_content', {
+      title: '提交审核',
+      description: '把草稿或被驳回的作品送去审核。',
+      inputSchema: { id: z.string().uuid() },
+    }, async ({ id }) => json(contentView(await this.contents.submit(id, user))))
+  }
+
+  private registerContentsReview(server: McpServer, user: User) {
+    server.registerTool('review_content', {
+      title: '审核作品',
+      description: '通过或驳回一个待审核的作品。驳回时应给出理由。',
+      inputSchema: {
+        id: z.string().uuid(),
+        action: z.enum(['approve', 'reject']),
+        note: z.string().max(1000).optional().describe('驳回理由'),
+      },
+    }, async ({ id, action, note }) => (
+      json(contentView(await this.contents.review(id, action, note, user)))
+    ))
+  }
+
+  private registerAccountsRead(server: McpServer, key: ApiKey) {
+    server.registerTool('list_accounts', {
+      title: '查询社交账号',
+      description: '列出这把密钥可操作的社交账号。返回值不含任何登录凭证。',
+      inputSchema: {
+        platform: z.enum(PLATFORMS).optional(),
+        status: z.enum(['active', 'inactive', 'banned', 'warming']).optional(),
+        search: z.string().max(200).optional().describe('用户名关键词'),
+      },
+    }, async (args) => {
+      const list = key.accountIds
+        ? await this.allowedAccounts(key.accountIds)
+        : (await this.accounts.findAll({ ...args, limit: 100 })).data
+
+      const filtered = list.filter((a) => (
+        (!args.platform || a.platform === args.platform)
+        && (!args.status || a.status === args.status)
+        && (!args.search || a.username.toLowerCase().includes(args.search.toLowerCase()))
+      ))
+      return json({ total: filtered.length, data: filtered.map(accountView) })
+    })
+  }
+
+  private registerTasksRead(server: McpServer, key: ApiKey) {
+    server.registerTool('list_tasks', {
+      title: '查询发布任务',
+      description: '查看发布任务的排队、执行与结果情况。',
+      inputSchema: {
+        contentId: z.string().uuid().optional(),
+        accountId: z.string().uuid().optional(),
+        page: z.number().int().min(1).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    }, async ({ page = 1, limit = 20, accountId, contentId }) => {
+      if (accountId) this.assertAccountsAllowed(key, [accountId])
+      const res = await this.tasks.findAll(page, limit, accountId, contentId)
+      const visible = key.accountIds
+        ? res.data.filter((t) => t.accountIds.some((id) => key.accountIds!.includes(id)))
+        : res.data
+      return json({ total: res.total, page: res.page, data: visible.map(taskView) })
+    })
+  }
+
+  private registerTasksPublish(server: McpServer, key: ApiKey) {
+    server.registerTool('publish_content', {
+      title: '发布作品',
+      description: '把一个已通过审核的作品投放到指定账号。可以指定时间来定时发布。',
+      inputSchema: {
+        contentId: z.string().uuid(),
+        accountIds: z.array(z.string().uuid()).min(1).max(100),
+        scheduledAt: z.string().datetime().optional().describe('ISO 时间，留空表示立即发布'),
+      },
+    }, async (args) => {
+      this.assertAccountsAllowed(key, args.accountIds)
+      return json(taskView(await this.tasks.create(args)))
+    })
+  }
+
+  private registerAnalyticsRead(server: McpServer, key: ApiKey) {
+    server.registerTool('get_account_analytics', {
+      title: '查询账号数据趋势',
+      description: '读取某个账号最近的粉丝、互动等历史快照。',
+      inputSchema: { accountId: z.string().uuid() },
+    }, async ({ accountId }) => {
+      this.assertAccountsAllowed(key, [accountId])
+      return json(await this.analytics.getByAccount(accountId))
+    })
+  }
+
+  private allowedAccounts(ids: string[]): Promise<Account[]> {
+    return Promise.all(ids.map((id) => this.accounts.findOne(id)))
+  }
+
+  /** accountIds 为 null 表示不限账号；空数组表示一个都不许碰 */
+  private assertAccountsAllowed(key: ApiKey, ids: string[]) {
+    if (!key.accountIds) return
+    const denied = ids.filter((id) => !key.accountIds!.includes(id))
+    if (denied.length) throw new ForbiddenException(`该密钥无权操作账号：${denied.join(', ')}`)
+  }
+}
+
+function json(value: unknown): ToolResult {
+  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] }
+}
+
+// 手写投影而不是直接回实体：MCP 这条链路上没有 ClassSerializerInterceptor，
+// @Exclude 不会生效，sessionData 之类的凭证会被原样吐给 AI。
+function accountView(a: Account) {
+  return {
+    id: a.id,
+    platform: a.platform,
+    username: a.username,
+    displayName: a.displayName,
+    status: a.status,
+    followers: a.followers,
+    following: a.following,
+    postsCount: a.postsCount,
+    lastActiveAt: a.lastActiveAt ?? null,
+  }
+}
+
+function contentView(c: Content) {
+  return {
+    id: c.id,
+    title: c.title,
+    type: c.type,
+    caption: c.caption ?? null,
+    hashtags: c.hashtags,
+    platforms: c.platforms,
+    fileUrl: c.fileUrl ?? null,
+    thumbnailUrl: c.thumbnailUrl ?? null,
+    duration: c.duration ?? null,
+    reviewStatus: c.reviewStatus,
+    reviewNote: c.reviewNote ?? null,
+    reviewedBy: c.reviewedBy ?? null,
+    reviewedAt: c.reviewedAt ?? null,
+    createdBy: c.createdBy ?? null,
+    createdAt: c.createdAt,
+  }
+}
+
+function taskView(t: PublishTask) {
+  return {
+    id: t.id,
+    contentId: t.contentId,
+    contentTitle: t.content?.title ?? null,
+    accountIds: t.accountIds,
+    platforms: t.platforms,
+    status: t.status,
+    scheduledAt: t.scheduledAt,
+    completedAt: t.completedAt ?? null,
+    results: t.results,
+  }
+}

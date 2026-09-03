@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog'
+import { McpKeysCard } from '@/components/settings/McpKeysCard'
 import { useMe } from '@/lib/auth'
 
 export default function SettingsPage() {
@@ -31,6 +32,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {me?.role === 'admin' && <McpKeysCard />}
 
         <Card>
           <CardHeader>

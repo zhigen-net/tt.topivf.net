@@ -8,5 +8,6 @@ import { AnalyticsService } from './analytics.service'
   imports: [TypeOrmModule.forFeature([StatsSnapshot])],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

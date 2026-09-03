@@ -108,6 +108,33 @@ export interface Stats {
   recordedAt: string
 }
 
+export const MCP_SCOPES = [
+  'contents:read',
+  'contents:write',
+  'contents:review',
+  'accounts:read',
+  'tasks:read',
+  'tasks:publish',
+  'analytics:read',
+] as const
+
+export type McpScope = (typeof MCP_SCOPES)[number]
+
+export interface ApiKey {
+  id: string
+  name: string
+  prefix: string
+  userId: string
+  user?: User
+  scopes: McpScope[]
+  /** null 表示不限账号 */
+  accountIds?: string[] | null
+  expiresAt?: string | null
+  revokedAt?: string | null
+  lastUsedAt?: string | null
+  createdAt: string
+}
+
 export interface PaginatedResponse<T> {
   data: T[]
   total: number

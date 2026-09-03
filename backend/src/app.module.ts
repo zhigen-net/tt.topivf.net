@@ -11,6 +11,7 @@ import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { PlatformsModule } from './platforms/platforms.module'
+import { McpModule } from './mcp/mcp.module'
 import appConfig from './config/app.config'
 
 @Module({
@@ -52,6 +53,7 @@ import appConfig from './config/app.config'
     ProxiesModule,
     AnalyticsModule,
     DashboardModule,
+    McpModule,
   ],
 })
 export class AppModule {}
