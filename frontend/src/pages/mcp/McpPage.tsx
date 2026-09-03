@@ -321,32 +321,72 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   )
 }
 
+const TABS = [
+  { id: 'cli', label: '命令行' },
+  { id: 'json', label: '配置文件' },
+  { id: 'prompt', label: '提示词' },
+] as const
+
+type TabId = (typeof TABS)[number]['id']
+
 function IssuedTokenDialog({ issued, onClose }: {
   issued: { apiKey: ApiKey; token: string } | null
   onClose: () => void
 }) {
-  const cliCommand = issued
-    ? `claude mcp add --transport http socialhub ${ENDPOINT} --header "Authorization: Bearer ${issued.token}"`
-    : ''
+  const [tab, setTab] = useState<TabId>('cli')
+  const token = issued?.token ?? ''
+  const name = issued?.apiKey.name ?? 'socialhub'
+
+  useEffect(() => { if (issued) setTab('cli') }, [issued])
+
+  const cli = `claude mcp add --transport http socialhub ${ENDPOINT} --header "Authorization: Bearer ${token}"`
+  const config = JSON.stringify({
+    mcpServers: {
+      socialhub: { type: 'http', url: ENDPOINT, headers: { Authorization: `Bearer ${token}` } },
+    },
+  }, null, 2)
+  const prompt = buildPrompt(issued?.apiKey.scopes ?? [], name)
 
   return (
     <Dialog open={Boolean(issued)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>服务已创建</DialogTitle></DialogHeader>
 
         <div className="space-y-4">
           <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            这是唯一一次能看到完整密钥的机会，关掉后就取不回来了。
+            这是唯一一次能看到完整密钥的机会，关掉后就取不回来了。下面的命令和配置里已经带上了它。
           </p>
 
           <div className="space-y-1.5">
             <Label>密钥</Label>
-            <CopyLine value={issued?.token ?? ''} />
+            <CopyLine value={token} />
           </div>
 
-          <div className="space-y-1.5">
-            <Label>接入 Claude Code</Label>
-            <CopyLine value={cliCommand} />
+          <div className="space-y-2">
+            <Label>接入方式</Label>
+            <div className="flex gap-2">
+              {TABS.map((t) => (
+                <ChoiceButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
+                  {t.label}
+                </ChoiceButton>
+              ))}
+            </div>
+
+            {tab === 'cli' && (
+              <CopyBlock hint="Claude Code / Codex 等命令行客户端，粘到终端执行即可" value={cli} />
+            )}
+            {tab === 'json' && (
+              <CopyBlock
+                hint="Claude Desktop、Cursor、Cline、Windsurf 等：把这段合并进它们的 MCP 配置文件"
+                value={config}
+              />
+            )}
+            {tab === 'prompt' && (
+              <CopyBlock
+                hint="贴进 Agent 的系统提示词 / 项目规则，内容已按这个服务的权限裁剪过"
+                value={prompt}
+              />
+            )}
           </div>
         </div>
 
@@ -355,6 +395,77 @@ function IssuedTokenDialog({ issued, onClose }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const SCOPE_TOOLS: Record<McpScope, string> = {
+  'contents:read': '- list_contents：分页查作品，可按关键词、平台、审核状态过滤\n- get_content：按 id 看单个作品详情',
+  'contents:write': '- create_content：新建作品，落地即草稿\n- update_content：改作品；改动会让已有审核结论作废、退回草稿\n- submit_content：把草稿或被驳回的作品送去审核',
+  'contents:review': '- review_content：approve 通过 / reject 驳回，驳回必须在 note 里写清理由',
+  'accounts:read': '- list_accounts：列出你能操作的社交账号，返回值不含任何登录凭证',
+  'tasks:read': '- list_tasks：查发布任务的排队、执行与结果',
+  'tasks:publish': '- publish_content：把已过审的作品投到指定账号，scheduledAt 留空表示立即发布',
+  'analytics:read': '- get_account_analytics：读某个账号的粉丝、互动历史快照',
+}
+
+/** 提示词按这把密钥实际拿到的权限裁剪，免得 Agent 去试它根本调不到的工具 */
+function buildPrompt(scopes: McpScope[], name: string): string {
+  const tools = MCP_SCOPES.filter((s) => scopes.includes(s)).map((s) => SCOPE_TOOLS[s]).join('\n')
+
+  const rules = [
+    '- 账号范围和权限都写死在密钥里。碰到 403 说明这把密钥没这个权限，直接告诉我，不要换参数重试。',
+    '- 平台取值：tiktok、instagram、youtube、twitter、facebook；作品类型：video、image、reel、story。',
+    '- 时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
+    '- 作品 id、账号 id 都是 uuid，不要自己编，先用查询类工具拿到真实 id。',
+  ]
+  if (scopes.includes('contents:review')) {
+    rules.push('- 你有审核权限，等于绕过了人工把关。批准前先自查文案合规、素材可访问、平台设置正确。')
+  }
+  if (scopes.includes('tasks:publish')) {
+    rules.push('- 发布会对外产生真实影响且不可撤回。调 publish_content 之前，先把「作品标题 + 目标账号 + 发布时间」列出来让我确认。')
+  }
+
+  return [
+    `你已接入 SocialHub 社媒管理系统（MCP 服务「${name}」），可以代我管理社交账号的内容生产与发布。`,
+    '',
+    '工作流：作品必须依次经过 草稿 →（submit_content）待审核 →（review_content）已通过 →（publish_content）发布。跳步会被服务端拒绝。作品一旦被修改，审核结论作废、退回草稿，需要重新走一遍。',
+    '',
+    '可用工具：',
+    tools || '（这把密钥没有勾选任何权限）',
+    '',
+    '约束：',
+    ...rules,
+    '',
+    '用中文回话。账号名、粉丝数、发布时间一律照工具返回值转述，不要估算或补全。',
+  ].join('\n')
+}
+
+function CopyBlock({ value, hint }: { value: string; hint: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">{hint}</p>
+        <Button variant="outline" size="sm" className="shrink-0" onClick={copy}>
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? '已复制' : '复制'}
+        </Button>
+      </div>
+      <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-words">
+        {value}
+      </pre>
+    </div>
   )
 }
 
