@@ -11,11 +11,12 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { api } from '@/lib/api'
+import { useAllAccounts } from '@/lib/accounts'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
 import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 import { MCP_SCOPES } from '@/types'
-import type { Account, ApiKey, McpScope, PaginatedResponse } from '@/types'
+import type { ApiKey, McpScope } from '@/types'
 
 const SCOPE_LABELS: Record<McpScope, { label: string; hint: string }> = {
   'contents:read': { label: '查看作品', hint: '读取作品库、审核状态与发布情况' },
@@ -177,12 +178,7 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
   const [expiresAt, setExpiresAt] = useState('')
   const [search, setSearch] = useState('')
 
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: () => api.get<PaginatedResponse<Account>>('/accounts', { params: { limit: 100 } })
-      .then((r) => r.data.data),
-    enabled: open,
-  })
+  const accounts = useAllAccounts(open)
 
   useEffect(() => {
     if (!open) return

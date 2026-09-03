@@ -2,6 +2,7 @@ import { Users, FileVideo, CalendarClock, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api } from '@/lib/api'
+import { useAllAccounts } from '@/lib/accounts'
 
 interface DashboardStats {
   accounts: number
@@ -109,12 +110,7 @@ function RecentTasks() {
 }
 
 function PlatformDistribution() {
-  const { data } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: () => api.get<{ data: Array<{ platform: string }> }>('/accounts?limit=100').then((r) => r.data),
-  })
-
-  const accounts = data?.data ?? []
+  const accounts = useAllAccounts()
   if (accounts.length === 0) return <p className="text-sm text-muted-foreground">还没有绑定账号</p>
 
   const counts: Record<string, number> = {}

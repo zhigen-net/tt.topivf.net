@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AccountPicker, usePublishHistory } from '@/components/accounts/AccountPicker'
 import { api } from '@/lib/api'
-import type { Account, Content } from '@/types'
+import { useAllAccounts } from '@/lib/accounts'
+import type { Content } from '@/types'
 
 interface Props {
   open: boolean
@@ -29,15 +30,8 @@ export function NewTaskDialog({ open, onClose }: Props) {
     enabled: open,
   })
 
-  // 列表页那份是分页的（默认 20 条），选账号得把全部拿回来
-  const { data: accountsData } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: () => api.get<{ data: Account[] }>('/accounts', { params: { limit: 500 } }).then((r) => r.data),
-    enabled: open,
-  })
-
+  const accounts = useAllAccounts(open)
   const contents = contentsData?.data ?? []
-  const accounts = accountsData?.data ?? []
 
   const selectedContent = contents.find((c) => c.id === contentId)
   const allowedAccounts = selectedContent

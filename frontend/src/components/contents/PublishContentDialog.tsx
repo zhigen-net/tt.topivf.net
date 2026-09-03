@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { platformLabel } from './constants'
 import { AccountPicker, usePublishHistory } from '@/components/accounts/AccountPicker'
 import { api } from '@/lib/api'
-import type { Account, Content, Platform } from '@/types'
+import { useAllAccounts } from '@/lib/accounts'
+import type { Content, Platform } from '@/types'
 
 interface Props {
   contents: Content[]
@@ -30,12 +31,7 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
     setScheduledAt(defaultSchedule())
   }, [open, contents])
 
-  // 列表页那份是分页的（默认 20 条），选账号得把全部拿回来
-  const { data } = useQuery({
-    queryKey: ['accounts', 'all'],
-    queryFn: () => api.get<{ data: Account[] }>('/accounts', { params: { limit: 500 } }).then((r) => r.data),
-    enabled: open,
-  })
+  const accounts = useAllAccounts(open)
 
   const platforms = useMemo(
     () => [...new Set(contents.flatMap((c) => c.platforms))] as Platform[],
@@ -45,7 +41,6 @@ export function PublishContentDialog({ contents, onClose, onPublished }: Props) 
   // 多选时每个作品的发布情况各不相同，按账号标记「已发布」没有意义
   const history = usePublishHistory(contents.length === 1 ? contents[0].id : undefined, open)
 
-  const accounts = data?.data ?? []
   // 只有内容声明过的平台才发得出去，其它账号列出来只会误导
   const candidates = accounts.filter((a) => platforms.includes(a.platform))
   const inactiveSelected = candidates.filter((a) => selected.includes(a.id) && a.status !== 'active')
