@@ -338,6 +338,8 @@ function IssuedTokenDialog({ issued, onClose }: {
   }, null, 2)
   const prompt = buildPrompt({
     serverName,
+    cli,
+    config,
     label: key?.name ?? '',
     workspaceName: workspace?.name ?? '',
     scopeText,
@@ -377,8 +379,8 @@ function IssuedTokenDialog({ issued, onClose }: {
             value={config}
           />
           <CopyRow
-            title="提示词"
-            hint="贴进 Agent 系统提示词，含服务名、权限与多服务隔离约定"
+            title="提示词（一键接入）"
+            hint="直接发给 Agent，它会自行挂载并按规则使用。含密钥，别外传"
             value={prompt}
           />
         </div>
@@ -401,8 +403,26 @@ const SCOPE_TOOLS: Record<McpScope, string> = {
   'analytics:read': '- get_account_analytics：读某个账号的粉丝、互动历史快照',
 }
 
+const SCOPE_PROBE_TOOL: Record<McpScope, string> = {
+  'contents:read': 'list_contents',
+  'contents:write': 'create_content',
+  'contents:review': 'review_content',
+  'accounts:read': 'list_accounts',
+  'tasks:read': 'list_tasks',
+  'tasks:publish': 'publish_content',
+  'analytics:read': 'get_account_analytics',
+}
+
+// 让 Agent 自查接入是否成功，得给一个这把密钥真的能看到的工具名
+function firstTool(scopes: McpScope[]): string {
+  const hit = MCP_SCOPES.find((s) => scopes.includes(s))
+  return hit ? SCOPE_PROBE_TOOL[hit] : 'SocialHub'
+}
+
 interface PromptInput {
   serverName: string
+  cli: string
+  config: string
   label: string
   workspaceName: string
   scopeText: string
@@ -414,7 +434,7 @@ interface PromptInput {
  * 开头那段服务标识是给多服务场景用的：同一个 Agent 挂着几个空间的 SocialHub 时，
  * 光看工具名分不出彼此，必须靠服务名把 id 的作用域框住。
  */
-function buildPrompt({ serverName, label, workspaceName, scopeText, scopes }: PromptInput): string {
+function buildPrompt({ serverName, cli, config, label, workspaceName, scopeText, scopes }: PromptInput): string {
   const tools = MCP_SCOPES.filter((s) => scopes.includes(s)).map((s) => SCOPE_TOOLS[s]).join('\n')
   const permissions = MCP_SCOPES.filter((s) => scopes.includes(s))
     .map((s) => SCOPE_LABELS[s].label)
@@ -434,7 +454,16 @@ function buildPrompt({ serverName, label, workspaceName, scopeText, scopes }: Pr
   }
 
   return [
-    `你已接入 SocialHub 社媒管理系统。以下说明只对 MCP 服务 ${serverName} 有效。`,
+    `请先把 SocialHub 社媒管理系统的 MCP 服务 ${serverName} 接入你自己，再按后面的说明使用它。`,
+    '',
+    '第一步：接入（两种方式任选其一，做完再往下看）',
+    '方式 A —— 你能执行 shell 命令的话，直接跑这条：',
+    cli,
+    '方式 B —— 不能执行命令的话，把下面这段合并进你的 MCP 配置文件（mcpServers 字段下），然后重启：',
+    config,
+    `接入后先确认工具列表里出现了 ${firstTool(scopes)} 之类的工具；没出现就把报错原样告诉我，不要继续往下猜。`,
+    '',
+    `第二步：以下说明只对 MCP 服务 ${serverName} 有效。`,
     '',
     '服务标识',
     `- MCP 服务名：${serverName}`,
