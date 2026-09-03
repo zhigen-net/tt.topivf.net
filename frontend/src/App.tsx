@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout } from '@/components/layout/Layout'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import LoginPage from '@/pages/auth/LoginPage'
 import Dashboard from '@/pages/Dashboard'
 import AccountsPage from '@/pages/accounts/AccountsPage'
@@ -35,31 +36,33 @@ function RequireAdmin() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<RequireAuth />}>
-            <Route element={<Layout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/accounts" element={<AccountsPage />} />
-              <Route path="/contents" element={<ContentsPage />} />
-              <Route path="/assets" element={<AssetsPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/workspace" element={<WorkspacePage />} />
-              <Route path="/proxies" element={<ProxiesPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/mcp" element={<McpPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route element={<RequireAdmin />}>
-                <Route path="/users" element={<UsersPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+    <ErrorBoundary scope="应用">
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route element={<RequireAuth />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/accounts" element={<AccountsPage />} />
+                <Route path="/contents" element={<ContentsPage />} />
+                <Route path="/assets" element={<AssetsPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/workspace" element={<WorkspacePage />} />
+                <Route path="/proxies" element={<ProxiesPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/mcp" element={<McpPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route element={<RequireAdmin />}>
+                  <Route path="/users" element={<UsersPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
               </Route>
             </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

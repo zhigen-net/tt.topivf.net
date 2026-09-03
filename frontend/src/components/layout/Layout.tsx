@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Globe, Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -41,7 +42,10 @@ export function Layout() {
           <span className="text-sm font-semibold">SocialHub</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          {/* 按路由做 key：换页面就重置，用户不用刷新也能从崩溃里走出来 */}
+          <ErrorBoundary key={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
