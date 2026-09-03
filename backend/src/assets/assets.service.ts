@@ -179,9 +179,11 @@ export class AssetsService {
   }
 
   private verify(payload: string, sig: string) {
+    // Buffer.from(x, 'hex') 遇到非法字符会静默截断，光比长度的话
+    // 在正确签名后面接任意垃圾都能过，这里先卡死格式
+    if (!/^[0-9a-f]{64}$/.test(sig)) return false
     const expected = createHmac('sha256', this.secret).update(payload).digest()
-    const given = Buffer.from(sig, 'hex')
-    return given.length === expected.length && timingSafeEqual(given, expected)
+    return timingSafeEqual(Buffer.from(sig, 'hex'), expected)
   }
 
   private async findReferencedIds(ids: string[]): Promise<Set<string>> {
