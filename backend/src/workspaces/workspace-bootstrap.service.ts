@@ -41,9 +41,11 @@ export class WorkspaceBootstrapService implements OnModuleInit {
   }
 
   private async ensureMemberships(workspaceId: string) {
+    // CASE 的结果是 text，直接塞进枚举列 Postgres 不会隐式转，必须显式 cast；
+    // 类型名是 TypeORM 按「表名_列名_enum」生成的
     const inserted = await this.ds.query<{ id: string }[]>(
       `INSERT INTO workspace_members (workspace_id, user_id, role)
-       SELECT $1, u.id, CASE WHEN u.role = 'admin' THEN 'manager' ELSE 'member' END
+       SELECT $1, u.id, (CASE WHEN u.role = 'admin' THEN 'manager' ELSE 'member' END)::workspace_members_role_enum
        FROM users u
        WHERE NOT EXISTS (
          SELECT 1 FROM workspace_members m WHERE m.workspace_id = $1 AND m.user_id = u.id
