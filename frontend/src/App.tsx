@@ -18,12 +18,19 @@ import ProfilePage from '@/pages/profile/ProfilePage'
 import UsersPage from '@/pages/users/UsersPage'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
+import { useDocumentTitle } from '@/lib/page-title'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000 },
   },
 })
+
+// 必须在 BrowserRouter 里面才拿得到 location，所以单独包一层
+function TitleSync() {
+  useDocumentTitle()
+  return null
+}
 
 function RequireAuth() {
   const token = localStorage.getItem('token')
@@ -47,6 +54,7 @@ export default function App() {
     <ErrorBoundary scope="应用">
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <TitleSync />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<RequireAuth />}>

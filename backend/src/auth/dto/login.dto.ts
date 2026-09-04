@@ -1,13 +1,11 @@
-import { IsString, MaxLength, MinLength } from 'class-validator'
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 
 export class LoginDto {
-  /** 字段名保持不变，值可以是用户名也可以是邮箱 */
-  @ApiProperty({ description: '用户名或邮箱' })
-  @IsString()
-  @MinLength(1)
+  @ApiProperty({ description: '登录邮箱' })
+  @IsEmail({}, { message: '邮箱格式不正确' })
   @MaxLength(255)
-  username: string
+  email: string
 
   @ApiProperty()
   @IsString()

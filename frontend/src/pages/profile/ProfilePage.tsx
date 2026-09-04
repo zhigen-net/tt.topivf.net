@@ -23,7 +23,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!me) return
     setDisplayName(me.displayName)
-    setEmail(me.email ?? '')
+    setEmail(me.email)
   }, [me])
 
   const save = useMutation({
@@ -31,8 +31,9 @@ export default function ProfilePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 
-  const changed = displayName.trim() !== me?.displayName || email.trim() !== (me?.email ?? '')
-  const dirty = Boolean(me) && changed && displayName.trim().length > 0
+  const changed = displayName.trim() !== me?.displayName || email.trim() !== me?.email
+  const filled = displayName.trim().length > 0 && email.trim().length > 0
+  const dirty = Boolean(me) && changed && filled
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -45,7 +46,7 @@ export default function ProfilePage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">基本资料</CardTitle>
-            <CardDescription>用户名由管理员分配，不能自行修改</CardDescription>
+            <CardDescription>邮箱是你的登录凭据，用户名由管理员分配，不能自行修改</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -59,10 +60,9 @@ export default function ProfilePage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="选填"
                 autoComplete="email"
               />
-              <p className="text-xs text-muted-foreground">填了之后，登录时用邮箱代替用户名也可以</p>
+              <p className="text-xs text-muted-foreground">改完之后要用新邮箱登录</p>
             </div>
             <div className="space-y-1.5">
               <Label>显示名称</Label>

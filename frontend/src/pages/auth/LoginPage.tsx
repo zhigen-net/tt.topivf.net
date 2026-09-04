@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 export default function LoginPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,7 +21,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ token: string }>('/auth/login', { username, password })
+      const res = await api.post<{ token: string }>('/auth/login', { email: email.trim(), password })
       localStorage.setItem('token', res.data.token)
       // 上一个人的身份还缓存着，不清掉会按错误的角色渲染菜单
       qc.clear()
@@ -49,12 +49,13 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="username">用户名或邮箱</Label>
+            <Label htmlFor="email">邮箱</Label>
             <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </div>

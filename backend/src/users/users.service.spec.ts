@@ -3,29 +3,21 @@ import { UsersService } from './users.service'
 import type { User } from './user.entity'
 
 function makeService(existing: Partial<User> | null = null) {
-  const qb: Record<string, jest.Mock> = {}
-  qb.where = jest.fn(() => qb)
-  qb.getOne = jest.fn().mockResolvedValue(existing)
-
   const repo = {
-    createQueryBuilder: jest.fn(() => qb),
     findOneBy: jest.fn().mockResolvedValue(existing),
     findOne: jest.fn().mockResolvedValue(existing),
     create: jest.fn((v) => v),
     save: jest.fn(async (v) => v),
   }
   const svc = new UsersService(repo as any, {} as any)
-  return { svc, repo, qb }
+  return { svc, repo }
 }
 
 describe('UsersService 邮箱登录', () => {
-  it('用户名和邮箱查的是同一条语句，邮箱那侧按小写比', async () => {
-    const { svc, qb } = makeService(null)
-    await svc.findByLogin('  Someone@Example.COM ')
-    expect(qb.where).toHaveBeenCalledWith(
-      'u.username = :value OR u.email = :email',
-      { value: 'Someone@Example.COM', email: 'someone@example.com' },
-    )
+  it('查登录账号时邮箱按小写比', async () => {
+    const { svc, repo } = makeService(null)
+    await svc.findByEmail('  Someone@Example.COM ')
+    expect(repo.findOneBy).toHaveBeenCalledWith({ email: 'someone@example.com' })
   })
 
   it('新建用户时邮箱转小写落库', async () => {
@@ -45,16 +37,10 @@ describe('UsersService 邮箱登录', () => {
     })).rejects.toBeInstanceOf(ConflictException)
   })
 
-  it('留空邮箱存成 null，不是空串', async () => {
-    const { svc } = makeService(null)
-    const saved = await svc.create({ username: 'bob', password: 'password1', displayName: 'Bob' })
-    expect(saved.email).toBeNull()
-  })
-
-  it('改自己资料时把邮箱清空', async () => {
+  it('改自己资料时能换邮箱', async () => {
     const { svc } = makeService({ id: 'me-1', displayName: '旧名', email: 'old@example.com' })
-    const saved = await svc.updateProfile('me-1', { displayName: '新名', email: null })
-    expect(saved.email).toBeNull()
+    const saved = await svc.updateProfile('me-1', { displayName: '新名', email: 'New@Example.com' })
+    expect(saved.email).toBe('new@example.com')
     expect(saved.displayName).toBe('新名')
   })
 

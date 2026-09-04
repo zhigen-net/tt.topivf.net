@@ -11,13 +11,9 @@ export class User {
   @Column({ unique: true })
   username: string
 
-  /**
-   * 可选的第二登录名。用户名的字符集里没有 @，两者不会撞到一起，
-   * 所以登录时同一个输入框拿去比这两列是安全的。存之前统一转小写。
-   */
-  // 必须显式写 type：联合类型 string | null 反射出来是 Object，TypeORM 认不出来
-  @Column({ type: 'varchar', unique: true, nullable: true })
-  email?: string | null
+  /** 唯一的登录凭据。username 只用于展示和检索。存之前统一转小写 */
+  @Column({ unique: true })
+  email: string
 
   // ClassSerializerInterceptor 靠这个把哈希挡在响应外，返回值必须保持类实例
   @Exclude()

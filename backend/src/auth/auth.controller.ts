@@ -14,7 +14,7 @@ export class AuthController {
   @Public()
   @Post('login')
   login(@Body() dto: LoginDto) {
-    return this.svc.login(dto.username, dto.password)
+    return this.svc.login(dto.email, dto.password)
   }
 
   @ApiBearerAuth()

@@ -11,8 +11,8 @@ import { ChangePasswordDto, CreateUserDto, UpdateProfileDto, UpdateUserDto } fro
 const ROUNDS = 10
 
 /** 邮箱大小写不敏感，统一按小写存，登录时也按小写比 */
-function normalizeEmail(email?: string | null) {
-  return email?.trim().toLowerCase() || null
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
 }
 
 @Injectable()
@@ -30,6 +30,7 @@ export class UsersService implements OnModuleInit {
     const password = process.env.ADMIN_PASSWORD ?? 'admin123'
     await this.repo.save(this.repo.create({
       username: 'admin',
+      email: normalizeEmail(process.env.ADMIN_EMAIL ?? 'admin@socialhub.local'),
       passwordHash: await bcrypt.hash(password, ROUNDS),
       displayName: '管理员',
       role: 'admin',
@@ -63,20 +64,16 @@ export class UsersService implements OnModuleInit {
     return qb.orderBy('u.username', 'ASC').take(20).getMany()
   }
 
-  /** 登录用：用户名或邮箱都收，取回带哈希的记录 */
-  findByLogin(identifier: string) {
-    const value = identifier.trim()
-    return this.repo.createQueryBuilder('u')
-      .where('u.username = :value OR u.email = :email', { value, email: value.toLowerCase() })
-      .getOne()
+  /** 登录用：只认邮箱，取回带哈希的记录 */
+  findByEmail(email: string) {
+    return this.repo.findOneBy({ email: normalizeEmail(email) })
   }
 
   async create(dto: CreateUserDto) {
     if (await this.repo.findOneBy({ username: dto.username })) {
       throw new ConflictException('用户名已存在')
     }
-    const email = normalizeEmail(dto.email)
-    if (email) await this.assertEmailFree(email)
+    const email = await this.claimEmail(dto.email)
 
     return this.repo.save(this.repo.create({
       username: dto.username,
@@ -100,19 +97,16 @@ export class UsersService implements OnModuleInit {
   async updateProfile(id: string, dto: UpdateProfileDto) {
     const user = await this.findOne(id)
     user.displayName = dto.displayName
-    if (dto.email !== undefined) user.email = await this.claimEmail(dto.email, id)
+    user.email = await this.claimEmail(dto.email, id)
     return this.repo.save(user)
   }
 
-  private async claimEmail(raw: string | null, ownerId: string) {
+  /** 唯一索引在库里，但先在应用层拦一道才能给出中文提示而不是 500 */
+  private async claimEmail(raw: string, ownerId?: string) {
     const email = normalizeEmail(raw)
-    if (email) await this.assertEmailFree(email, ownerId)
-    return email
-  }
-
-  private async assertEmailFree(email: string, excludeId?: string) {
     const owner = await this.repo.findOneBy({ email })
-    if (owner && owner.id !== excludeId) throw new ConflictException('邮箱已被其它账号使用')
+    if (owner && owner.id !== ownerId) throw new ConflictException('邮箱已被其它账号使用')
+    return email
   }
 
   async resetPassword(id: string, password: string) {

@@ -1,12 +1,8 @@
 import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator'
-import { Transform } from 'class-transformer'
 import { ApiProperty, ApiPropertyOptional, PartialType, OmitType } from '@nestjs/swagger'
 import type { UserRole } from '../user.entity'
 
 export const USER_ROLES = ['admin', 'user'] as const
-
-/** 表单清空邮箱时提交的是空串，落库要变成 null，否则第二个空串会撞唯一索引 */
-const blankToNull = () => Transform(({ value }) => (typeof value === 'string' && !value.trim() ? null : value))
 
 export class CreateUserDto {
   @ApiProperty()
@@ -28,12 +24,10 @@ export class CreateUserDto {
   @MaxLength(64)
   displayName: string
 
-  @ApiPropertyOptional({ nullable: true, description: '可选，填了就能用邮箱登录' })
-  @IsOptional()
-  @blankToNull()
+  @ApiProperty({ description: '登录邮箱' })
   @IsEmail({}, { message: '邮箱格式不正确' })
   @MaxLength(255)
-  email?: string | null
+  email: string
 
   @ApiPropertyOptional({ enum: USER_ROLES })
   @IsOptional()
@@ -55,12 +49,10 @@ export class UpdateProfileDto {
   @MaxLength(64)
   displayName: string
 
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @blankToNull()
+  @ApiProperty({ description: '登录邮箱' })
   @IsEmail({}, { message: '邮箱格式不正确' })
   @MaxLength(255)
-  email?: string | null
+  email: string
 }
 
 export class ResetPasswordDto {

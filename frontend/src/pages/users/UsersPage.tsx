@@ -120,7 +120,7 @@ export default function UsersPage() {
                     {u.id === me?.id && <span className="ml-1.5 text-xs text-muted-foreground">（我）</span>}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    @{u.username}{u.email && ` · ${u.email}`}
+                    {u.email} · @{u.username}
                   </p>
                 </div>
                 {roleBadge(u)}
@@ -155,7 +155,7 @@ export default function UsersPage() {
                       {u.id === me?.id && <span className="ml-1.5 text-xs text-muted-foreground">（我）</span>}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      @{u.username}{u.email && ` · ${u.email}`}
+                      {u.email} · @{u.username}
                     </p>
                   </td>
                   <td className="px-3 py-2">{roleBadge(u)}</td>
@@ -229,9 +229,11 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
     },
   })
 
-  const valid = user
+  // 邮箱是唯一的登录凭据，留空会被后端打回，这里先把提交按钮压住
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const valid = emailOk && (user
     ? displayName.trim().length > 0
-    : username.trim().length >= 3 && displayName.trim().length > 0 && password.length >= 8
+    : username.trim().length >= 3 && displayName.trim().length > 0 && password.length >= 8)
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -258,7 +260,7 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="选填，可用于登录"
+              placeholder="用于登录"
               autoComplete="off"
             />
           </div>
