@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TikTokLoginDialog } from './TikTokLoginDialog'
+import { TikTokOauthButton } from './TikTokOauthButton'
 import { FacebookLinkDialog, type MetaLinkResult } from './FacebookLinkDialog'
 import { api } from '@/lib/api'
 import type { Platform } from '@/types'
@@ -123,12 +124,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
               </Select>
             </div>
 
-            {/* TikTok 专属：账号密码登录（可切换扫码） */}
+            {isTikTok && <TikTokOauthButton onSuccess={handleClose} />}
+
+            {/* 官方授权拿不到时的后备：浏览器登录取 Cookie */}
             {isTikTok && (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">登录 TikTok</p>
+                    <p className="text-sm font-medium">登录 TikTok（后备方式）</p>
                     <p className="text-xs text-muted-foreground">
                       {hasQrCookies ? '✓ 已获取登录状态' : '账号密码登录，自动获取登录凭证'}
                     </p>
