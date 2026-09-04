@@ -129,6 +129,8 @@ export interface Content {
   type: ContentType
   fileUrl?: string
   thumbnailUrl?: string
+  /** 列表展示用：没设封面时会回落到配图，仅在列表接口返回 */
+  coverUrl?: string
   assetId?: string | null
   thumbnailAssetId?: string | null
   caption?: string

@@ -49,14 +49,19 @@ export class ContentsService {
       .getManyAndCount()
 
     const summaries = await this.publishSummaries(data.map((c) => c.id))
-    // 挂了素材库封面的作品没有 thumbnailUrl，列表拿签名直链补上，前端就不用分两种情况渲染
     const thumbs = await this.assetsService.signedUrlsFor(
       data.map((c) => c.thumbnailAssetId).filter((id): id is string => !!id),
+    )
+    // 没单独设封面的作品，退而用配图本身当封面
+    const covers = await this.assetsService.signedImageUrlsFor(
+      data.filter((c) => !c.thumbnailUrl && !c.thumbnailAssetId)
+        .map((c) => c.assetId)
+        .filter((id): id is string => !!id),
     )
 
     return {
       data: data.map((c) => Object.assign(c, summaries.get(c.id) ?? emptySummary(), {
-        thumbnailUrl: c.thumbnailUrl ?? (c.thumbnailAssetId ? thumbs.get(c.thumbnailAssetId) : undefined),
+        coverUrl: coverUrlOf(c, thumbs, covers),
       })),
       total,
       page,
@@ -241,6 +246,22 @@ const CLEAR_REVIEW = {
 
 function emptySummary(): PublishSummary {
   return { taskCount: 0, doneCount: 0, failedCount: 0, lastPublishedAt: null }
+}
+
+/**
+ * 列表展示用的封面，和用户真正设的 thumbnailUrl 分开：signedUrl 几分钟就过期，
+ * 混进 thumbnailUrl 会被编辑弹窗当成外链回填，一保存就存下一条马上失效的地址。
+ */
+export function coverUrlOf(
+  c: Pick<Content, 'thumbnailUrl' | 'thumbnailAssetId' | 'assetId' | 'fileUrl' | 'type'>,
+  thumbs: Map<string, string>,
+  covers: Map<string, string>,
+): string | undefined {
+  if (c.thumbnailUrl) return c.thumbnailUrl
+  if (c.thumbnailAssetId) return thumbs.get(c.thumbnailAssetId)
+  if (c.assetId) return covers.get(c.assetId)
+  // 外链配图只有图片类作品能直接当封面，视频链接塞进 img 是裂图
+  return c.type === 'image' ? c.fileUrl : undefined
 }
 
 /**

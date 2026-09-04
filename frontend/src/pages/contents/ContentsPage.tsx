@@ -361,8 +361,8 @@ export default function ContentsPage() {
               <div className="flex gap-3">
                 <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleOne(item.id)} />
                 <div className="h-10 w-16 shrink-0 rounded bg-muted overflow-hidden">
-                  {item.thumbnailUrl ? (
-                    <img src={item.thumbnailUrl} alt="" className="object-cover w-full h-full" />
+                  {item.coverUrl ? (
+                    <img src={item.coverUrl} alt="" className="object-cover w-full h-full" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                       {contentTypeLabel[item.type]}
@@ -423,8 +423,8 @@ export default function ContentsPage() {
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-9 w-14 shrink-0 rounded bg-muted overflow-hidden">
-                        {item.thumbnailUrl ? (
-                          <img src={item.thumbnailUrl} alt="" className="object-cover w-full h-full" />
+                        {item.coverUrl ? (
+                          <img src={item.coverUrl} alt="" className="object-cover w-full h-full" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                             {contentTypeLabel[item.type]}

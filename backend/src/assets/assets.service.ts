@@ -138,6 +138,13 @@ export class AssetsService {
     return new Map(assets.map((a) => [a.id, BROWSER_PREFIX + this.signedUrl(a)]))
   }
 
+  /** 同上，但只认图片：视频素材塞进 img 标签只会渲染成裂图 */
+  async signedImageUrlsFor(ids: string[]): Promise<Map<string, string>> {
+    if (!ids.length) return new Map()
+    const assets = await this.repo.findBy({ id: In([...new Set(ids)]), type: 'image' })
+    return new Map(assets.map((a) => [a.id, BROWSER_PREFIX + this.signedUrl(a)]))
+  }
+
   async findOneView(id: string, ws: WorkspaceContext) {
     const asset = await this.findOne(id, ws)
     return this.view(asset, (await this.findReferencedIds([id])).has(id))
