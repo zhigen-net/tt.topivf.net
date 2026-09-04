@@ -9,6 +9,7 @@ import { ContentFormDialog } from '@/components/contents/ContentFormDialog'
 import { PublishContentDialog } from '@/components/contents/PublishContentDialog'
 import { BulkPlatformsDialog } from '@/components/contents/BulkPlatformsDialog'
 import { RejectContentDialog } from '@/components/contents/RejectContentDialog'
+import { PublishRecordsDrawer } from '@/components/contents/PublishRecordsDrawer'
 import { allContentTypes, allPlatforms, contentTypeLabel, platformLabel, allReviewStatuses, reviewStatusLabel, reviewStatusClass } from '@/components/contents/constants'
 import { api } from '@/lib/api'
 import { useMe } from '@/lib/auth'
@@ -44,6 +45,7 @@ export default function ContentsPage() {
   const [platformsOpen, setPlatformsOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Content[] | null>(null)
   const [rejecting, setRejecting] = useState<Content[]>([])
+  const [recordsOf, setRecordsOf] = useState<Content | null>(null)
 
   // 每敲一个字就打一次接口没必要，停下来再查
   useEffect(() => {
@@ -382,7 +384,7 @@ export default function ContentsPage() {
               </div>
 
               <div className="text-xs">
-                <PublishState item={item} />
+                <PublishState item={item} onOpen={() => setRecordsOf(item)} />
               </div>
 
               <div className="flex items-center justify-between gap-2 border-t pt-2">
@@ -451,7 +453,7 @@ export default function ContentsPage() {
                     <ReviewState item={item} />
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    <PublishState item={item} />
+                    <PublishState item={item} onOpen={() => setRecordsOf(item)} />
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     <p className="tabular-nums">{formatTime(item.createdAt)}</p>
@@ -508,6 +510,7 @@ export default function ContentsPage() {
         onClose={() => setRejecting([])}
         onDone={() => { setRejecting([]); setSelectedIds([]) }}
       />
+      <PublishRecordsDrawer content={recordsOf} onClose={() => setRecordsOf(null)} />
     </div>
   )
 }
@@ -594,18 +597,26 @@ function ReviewState({ item }: { item: Content }) {
   )
 }
 
-function PublishState({ item }: { item: Content }) {
+function PublishState({ item, onOpen }: { item: Content; onOpen: () => void }) {
   if (item.taskCount === 0) return <span className="text-muted-foreground">未发布</span>
-  if (item.lastPublishedAt) {
-    return (
-      <span className="text-emerald-600">
-        已发布 · {formatTime(item.lastPublishedAt)}
-        {item.failedCount > 0 && <span className="text-destructive"> · {item.failedCount} 次失败</span>}
-      </span>
-    )
-  }
-  if (item.failedCount > 0) return <span className="text-destructive">{item.failedCount} 次发布失败</span>
-  return <span className="text-muted-foreground">{item.taskCount} 个任务待发布</span>
+  return (
+    <button
+      onClick={onOpen}
+      title="查看发布记录"
+      className="text-left underline-offset-2 hover:underline cursor-pointer"
+    >
+      {item.lastPublishedAt ? (
+        <span className="text-emerald-600">
+          已发布 · {formatTime(item.lastPublishedAt)}
+          {item.failedCount > 0 && <span className="text-destructive"> · {item.failedCount} 次失败</span>}
+        </span>
+      ) : item.failedCount > 0 ? (
+        <span className="text-destructive">{item.failedCount} 次发布失败</span>
+      ) : (
+        <span className="text-muted-foreground">{item.taskCount} 个任务待发布</span>
+      )}
+    </button>
+  )
 }
 
 function formatTime(iso: string): string {

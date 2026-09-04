@@ -7,22 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { NewTaskDialog } from '@/components/tasks/NewTaskDialog'
 import { TaskDetailDialog } from '@/components/tasks/TaskDetailDialog'
+import { taskStatusLabel, taskStatusVariant as statusVariant } from '@/components/tasks/constants'
 import { api } from '@/lib/api'
-import type { PublishTask, TaskStatus } from '@/types'
-
-const statusVariant: Record<TaskStatus, 'default' | 'success' | 'destructive' | 'secondary'> = {
-  pending: 'secondary',
-  running: 'default',
-  done: 'success',
-  failed: 'destructive',
-}
-
-const taskStatusLabel: Record<TaskStatus, string> = {
-  pending: '待执行',
-  running: '执行中',
-  done: '已完成',
-  failed: '失败',
-}
+import type { PublishTask } from '@/types'
 
 export default function TasksPage() {
   const qc = useQueryClient()

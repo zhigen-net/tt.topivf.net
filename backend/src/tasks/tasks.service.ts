@@ -7,6 +7,18 @@ import { PublishTask } from './publish-task.entity'
 import { Content } from '../contents/content.entity'
 import { Account } from '../accounts/account.entity'
 import { BulkCreateTaskDto, CreateTaskDto } from './dto/create-task.dto'
+import type { Platform } from '../accounts/account.entity'
+
+/** 发布记录里展示用的账号信息，只挑不敏感的几个字段 */
+export interface TaskAccountBrief {
+  id: string
+  username: string
+  displayName: string
+  platform: Platform
+  avatar?: string
+}
+
+export type TaskWithAccounts = PublishTask & { accounts: TaskAccountBrief[] }
 
 @Injectable()
 export class TasksService {
@@ -30,13 +42,47 @@ export class TasksService {
     if (contentId) qb.andWhere('t.contentId = :contentId', { contentId })
 
     const [data, total] = await qb.getManyAndCount()
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
+    return {
+      data: await this.attachAccounts(data, workspaceId),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    }
   }
 
   async findOne(id: string, workspaceId: string) {
     const task = await this.repo.findOneBy({ id, workspaceId })
     if (!task) throw new NotFoundException(`Task ${id} not found`)
-    return task
+    const [withAccounts] = await this.attachAccounts([task], workspaceId)
+    return withAccounts
+  }
+
+  /**
+   * 任务里只存了 accountIds，前端拿到一串 uuid 没法展示。把整页任务涉及的账号
+   * 一次查出来贴回去，账号数多起来时逐条查会打满连接池。
+   */
+  private async attachAccounts(tasks: PublishTask[], workspaceId: string): Promise<TaskWithAccounts[]> {
+    const ids = [...new Set(tasks.flatMap((t) => t.accountIds))]
+    const rows = ids.length
+      ? await this.accounts.find({
+          where: { id: In(ids), workspaceId },
+          select: { id: true, username: true, displayName: true, platform: true, avatar: true },
+        })
+      : []
+
+    const byId = new Map(rows.map((a): [string, TaskAccountBrief] => [a.id, {
+      id: a.id,
+      username: a.username,
+      displayName: a.displayName,
+      platform: a.platform,
+      avatar: a.avatar,
+    }]))
+
+    // 账号删了任务还留着，查不到的这里不补，由前端按 accountIds 显示成已删除
+    return tasks.map((t) => Object.assign(t, {
+      accounts: t.accountIds.map((id) => byId.get(id)).filter((a): a is TaskAccountBrief => !!a),
+    }))
   }
 
   async create(dto: CreateTaskDto, workspaceId: string) {

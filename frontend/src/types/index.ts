@@ -152,11 +152,21 @@ export interface Content {
   lastPublishedAt: string | null
 }
 
+/** 任务接口回填的账号信息，账号被删掉后就不在这个数组里了 */
+export interface TaskAccount {
+  id: string
+  username: string
+  displayName: string
+  platform: Platform
+  avatar?: string
+}
+
 export interface PublishTask {
   id: string
   contentId: string
   content?: Content
   accountIds: string[]
+  accounts?: TaskAccount[]
   platforms: Platform[]
   status: TaskStatus
   scheduledAt: string
