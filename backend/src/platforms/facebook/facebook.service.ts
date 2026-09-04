@@ -3,12 +3,22 @@ import { ConfigService } from '@nestjs/config'
 import { graphGet, GraphError } from './graph-api'
 import { exchangeForLongLived, inspectToken, type TokenInfo } from './token'
 
+export interface LinkableInstagram {
+  igUserId: string
+  username: string
+  avatar?: string
+  followers: number
+  postsCount: number
+}
+
 export interface LinkablePage {
   pageId: string
   name: string
   avatar?: string
   followers: number
   accessToken: string
+  /** 该主页关联的 Instagram 专业账号，没关联就没有 */
+  instagram?: LinkableInstagram
 }
 
 export interface LinkablePagesResult {
@@ -29,8 +39,19 @@ interface AccountsEdge {
     fan_count?: number
     picture?: { data?: { url?: string } }
     tasks?: string[]
+    instagram_business_account?: {
+      id: string
+      username?: string
+      profile_picture_url?: string
+      followers_count?: number
+      media_count?: number
+    }
   }>
 }
+
+const PAGE_FIELDS = 'id,name,access_token,followers_count,fan_count,picture,tasks'
+const IG_FIELDS =
+  'instagram_business_account{id,username,profile_picture_url,followers_count,media_count}'
 
 // 只列发布链路真正跑不动的那两个：缺 pages_read_engagement 只是读不到粉丝数和
 // 转码状态，适配器本来就能降级，不该因此把令牌挡在门外
@@ -100,30 +121,54 @@ export class FacebookService {
   }
 
   private async fetchPages(token: string): Promise<LinkablePage[]> {
-    const res = await friendly(
-      () =>
-        graphGet<AccountsEdge>(
-          '/me/accounts',
-          { fields: 'id,name,access_token,followers_count,fan_count,picture,tasks', limit: '100' },
-          token,
-        ),
-      '读取主页列表',
-    )
+    const res = await this.fetchAccounts(token)
 
     const pages = (res.data ?? [])
       .filter((p) => p.access_token && p.tasks?.includes('CREATE_CONTENT'))
-      .map((p) => ({
-        pageId: p.id,
-        name: p.name,
-        avatar: p.picture?.data?.url,
-        followers: p.followers_count ?? p.fan_count ?? 0,
-        accessToken: p.access_token as string,
-      }))
+      .map((p) => {
+        const ig = p.instagram_business_account
+        return {
+          pageId: p.id,
+          name: p.name,
+          avatar: p.picture?.data?.url,
+          followers: p.followers_count ?? p.fan_count ?? 0,
+          accessToken: p.access_token as string,
+          instagram: ig
+            ? {
+                igUserId: ig.id,
+                username: ig.username ?? ig.id,
+                avatar: ig.profile_picture_url,
+                followers: ig.followers_count ?? 0,
+                postsCount: ig.media_count ?? 0,
+              }
+            : undefined,
+        }
+      })
 
     if (!pages.length) {
       throw new BadRequestException('该令牌名下没有可发布的主页，请确认已分配主页资产与发布权限')
     }
     return pages
+  }
+
+  /**
+   * 令牌没有 instagram_basic 时，带上 IG 字段会让整个请求被拒。绑主页是主线，
+   * 不能因为读不到 IG 就连主页都列不出来，所以失败后退回只读主页再试一次。
+   */
+  private async fetchAccounts(token: string): Promise<AccountsEdge> {
+    try {
+      return await graphGet<AccountsEdge>(
+        '/me/accounts',
+        { fields: `${PAGE_FIELDS},${IG_FIELDS}`, limit: '100' },
+        token,
+      )
+    } catch (err) {
+      this.logger.warn(`带 Instagram 字段读取主页失败，退回只读主页: ${err}`)
+      return friendly(
+        () => graphGet<AccountsEdge>('/me/accounts', { fields: PAGE_FIELDS, limit: '100' }, token),
+        '读取主页列表',
+      )
+    }
   }
 }
 

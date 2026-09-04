@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TikTokLoginDialog } from './TikTokLoginDialog'
-import { FacebookLinkDialog, type FacebookLinkResult } from './FacebookLinkDialog'
+import { FacebookLinkDialog, type MetaLinkResult } from './FacebookLinkDialog'
 import { api } from '@/lib/api'
 import type { Platform } from '@/types'
 
@@ -35,8 +35,8 @@ export function AddAccountDialog({ open, onClose }: Props) {
   // 靠 cookie 内容长相判断来源会把手动粘贴的 JSON 误认成登录所得，从而把输入框收起来
   const [cookiesFromLogin, setCookiesFromLogin] = useState(false)
   const [tiktokLoginOpen, setTiktokLoginOpen] = useState(false)
-  const [facebookLinkOpen, setFacebookLinkOpen] = useState(false)
-  const [fbPage, setFbPage] = useState<{ pageId: string; pageAccessToken: string } | null>(null)
+  const [metaLinkOpen, setMetaLinkOpen] = useState(false)
+  const [metaSession, setMetaSession] = useState<Record<string, string> | null>(null)
 
   const mutation = useMutation({
     mutationFn: () => api.post('/accounts', {
@@ -52,7 +52,7 @@ export function AddAccountDialog({ open, onClose }: Props) {
   })
 
   function buildSessionData() {
-    if (platform === 'facebook') return fbPage ?? undefined
+    if (isMeta) return metaSession ?? undefined
     return cookies.trim() ? { cookies: cookies.trim() } : undefined
   }
 
@@ -63,14 +63,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
     setAvatar('')
     setCookies('')
     setCookiesFromLogin(false)
-    setFbPage(null)
+    setMetaSession(null)
     onClose()
   }
 
-  function handleFacebookLink(result: FacebookLinkResult) {
-    setFbPage({ pageId: result.pageId, pageAccessToken: result.pageAccessToken })
-    setUsername(result.name)
-    setDisplayName(result.name)
+  function handleMetaLink(result: MetaLinkResult) {
+    setMetaSession(result.sessionData)
+    setUsername(result.username)
+    setDisplayName(result.displayName)
     if (result.avatar) setAvatar(result.avatar)
   }
 
@@ -89,9 +89,9 @@ export function AddAccountDialog({ open, onClose }: Props) {
   }
 
   const isTikTok = platform === 'tiktok'
-  const isFacebook = platform === 'facebook'
+  const isMeta = platform === 'facebook' || platform === 'instagram'
   const hasQrCookies = isTikTok && cookiesFromLogin
-  const canSubmit = username.trim() && displayName.trim() && (!isFacebook || fbPage)
+  const canSubmit = username.trim() && displayName.trim() && (!isMeta || metaSession)
 
   return (
     <>
@@ -104,7 +104,14 @@ export function AddAccountDialog({ open, onClose }: Props) {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Platform</Label>
-              <Select value={platform} onValueChange={(v) => setPlatform(v as Platform)}>
+              <Select
+                value={platform}
+                onValueChange={(v) => {
+                  setPlatform(v as Platform)
+                  // 换平台后原来那份凭证已经对不上了，留着会被当成绑好了
+                  setMetaSession(null)
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -138,23 +145,29 @@ export function AddAccountDialog({ open, onClose }: Props) {
               </div>
             )}
 
-            {/* Facebook 专属：粘贴系统用户令牌后选主页 */}
-            {isFacebook && (
+            {/* Facebook / Instagram：粘贴系统用户令牌后选主页或它关联的 IG 账号 */}
+            {isMeta && (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium">绑定主页</p>
+                    <p className="text-sm font-medium">
+                      {platform === 'instagram' ? '绑定 Instagram 账号' : '绑定主页'}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {fbPage ? `✓ 已绑定主页 ${fbPage.pageId}` : '用商务平台令牌读取并选择主页'}
+                      {metaSession
+                        ? `✓ 已绑定 ${metaSession.igUserId ?? metaSession.pageId}`
+                        : platform === 'instagram'
+                          ? '用商务平台令牌读取主页下的 Instagram 账号'
+                          : '用商务平台令牌读取并选择主页'}
                     </p>
                   </div>
                   <Button
-                    variant={fbPage ? 'outline' : 'default'}
+                    variant={metaSession ? 'outline' : 'default'}
                     size="sm"
-                    onClick={() => setFacebookLinkOpen(true)}
+                    onClick={() => setMetaLinkOpen(true)}
                   >
                     <Link2 className="h-3.5 w-3.5 mr-1.5" />
-                    {fbPage ? '重新绑定' : '绑定'}
+                    {metaSession ? '重新绑定' : '绑定'}
                   </Button>
                 </div>
               </div>
@@ -231,9 +244,10 @@ export function AddAccountDialog({ open, onClose }: Props) {
       />
 
       <FacebookLinkDialog
-        open={facebookLinkOpen}
-        onClose={() => setFacebookLinkOpen(false)}
-        onSuccess={handleFacebookLink}
+        open={metaLinkOpen}
+        platform={platform === 'instagram' ? 'instagram' : 'facebook'}
+        onClose={() => setMetaLinkOpen(false)}
+        onSuccess={handleMetaLink}
       />
     </>
   )

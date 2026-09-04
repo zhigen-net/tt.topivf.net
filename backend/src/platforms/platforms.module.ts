@@ -3,6 +3,7 @@ import { BrowserManager } from './browser-manager.service'
 import { TiktokAdapter } from './tiktok/tiktok.adapter'
 import { TiktokLoginService } from './tiktok/tiktok-login.service'
 import { TiktokLoginController } from './tiktok/tiktok-login.controller'
+// Instagram 走官方 Graph API，不需要 BrowserManager
 import { InstagramAdapter } from './instagram/instagram.adapter'
 import { YoutubeAdapter } from './youtube/youtube.adapter'
 import { TwitterAdapter } from './twitter/twitter.adapter'
