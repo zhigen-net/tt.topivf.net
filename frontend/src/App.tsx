@@ -11,7 +11,6 @@ import WorkspacePage from '@/pages/workspace/WorkspacePage'
 import { WorkspaceLayout } from '@/pages/workspace/WorkspaceLayout'
 import TasksPage from '@/pages/tasks/TasksPage'
 import ProxiesPage from '@/pages/proxies/ProxiesPage'
-import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import McpPage from '@/pages/mcp/McpPage'
 import CredentialsPage from '@/pages/credentials/CredentialsPage'
@@ -67,7 +66,8 @@ export default function App() {
                 {/* 这两个页面搬进工作空间了，老链接和书签别 404 */}
                 <Route path="/credentials" element={<Navigate to="/workspace/credentials" replace />} />
                 <Route path="/proxies" element={<Navigate to="/workspace/proxies" replace />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                {/* 数据分析并进概览了 */}
+                <Route path="/analytics" element={<Navigate to="/" replace />} />
                 <Route path="/mcp" element={<McpPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route element={<RequireAdmin />}>

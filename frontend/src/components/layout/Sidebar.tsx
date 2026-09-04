@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  Users, FileVideo, BarChart3, Settings, Globe, LogOut,
+  Users, FileVideo, Settings, Globe, LogOut,
   LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -14,7 +14,6 @@ const nav = [
   { to: '/accounts', icon: Users, label: '账号管理' },
   { to: '/contents', icon: FileVideo, label: '作品管理' },
   { to: '/assets', icon: Images, label: '素材库' },
-  { to: '/analytics', icon: BarChart3, label: '数据分析' },
   { to: '/mcp', icon: Plug, label: 'MCP 服务' },
   { to: '/workspace', icon: Building2, label: '工作空间' },
   { to: '/users', icon: ShieldCheck, label: '用户管理', adminOnly: true },
