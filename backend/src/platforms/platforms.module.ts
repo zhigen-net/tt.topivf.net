@@ -26,6 +26,6 @@ import { PlatformsService } from './platforms.service'
     FacebookService,
     PlatformsService,
   ],
-  exports: [PlatformsService, BrowserManager],
+  exports: [PlatformsService, BrowserManager, FacebookService],
 })
 export class PlatformsModule {}

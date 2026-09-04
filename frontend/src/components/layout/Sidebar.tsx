@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Users, FileVideo, BarChart3, Settings, Globe, Wifi, LogOut,
-  LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight,
+  LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight, KeyRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMe } from '@/lib/auth'
@@ -12,6 +12,7 @@ import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 const nav = [
   { to: '/', icon: LayoutDashboard, label: '概览' },
   { to: '/accounts', icon: Users, label: '账号管理' },
+  { to: '/credentials', icon: KeyRound, label: '授权凭证' },
   { to: '/contents', icon: FileVideo, label: '作品管理' },
   { to: '/assets', icon: Images, label: '素材库' },
   { to: '/analytics', icon: BarChart3, label: '数据分析' },

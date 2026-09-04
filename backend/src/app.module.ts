@@ -13,6 +13,8 @@ import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { PlatformsModule } from './platforms/platforms.module'
+import { CryptoModule } from './crypto/crypto.module'
+import { CredentialsModule } from './credentials/credentials.module'
 import { McpModule } from './mcp/mcp.module'
 import appConfig from './config/app.config'
 
@@ -46,7 +48,9 @@ import appConfig from './config/app.config'
       }),
     }),
 
+    CryptoModule,
     PlatformsModule,
+    CredentialsModule,
     UsersModule,
     AuthModule,
     WorkspacesModule,

@@ -65,6 +65,40 @@ export interface Account {
   createdAt: string
 }
 
+export type CredentialStatus = 'active' | 'expiring' | 'invalid'
+
+/** 一条 Meta 授权源，名下可以挂多个主页 / Instagram 账号 */
+export interface MetaCredential {
+  id: string
+  label: string
+  appId: string
+  tokenType: string
+  scopes: string[]
+  /** unix 秒，0 表示永不过期 */
+  expiresAt: number
+  status: CredentialStatus
+  lastCheckedAt?: string
+  lastError?: string
+  pendingTargets: CredentialTarget[]
+  createdAt: string
+  accountCount: number
+}
+
+export interface CredentialTarget {
+  platform: 'facebook' | 'instagram'
+  /** facebook 是 pageId，instagram 是 igUserId */
+  externalId: string
+  username: string
+  displayName: string
+  avatar?: string
+}
+
+export interface DiscoveredTarget extends CredentialTarget {
+  followers: number
+  /** 已接入的要置灰，避免重复添加 */
+  linkedAccountId?: string
+}
+
 export interface AccountGroup {
   id: string
   name: string

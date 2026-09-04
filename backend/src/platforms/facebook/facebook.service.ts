@@ -47,6 +47,15 @@ interface AccountsEdge {
       media_count?: number
     }
   }>
+  paging?: { cursors?: { after?: string } }
+}
+
+/** 校验并（必要时）升级过的令牌，凭证托管要存的是这一条而不是用户粘的那条 */
+export interface ResolvedToken {
+  token: string
+  info: TokenInfo
+  expiresAt: number
+  exchanged: boolean
 }
 
 const PAGE_FIELDS = 'id,name,access_token,followers_count,fan_count,picture,tasks'
@@ -60,6 +69,10 @@ const REQUIRED_SCOPES = ['pages_show_list', 'pages_manage_posts']
 // 短期令牌 1~2 小时，长期令牌 60 天，拿一周做界足够把两者分开
 const SHORT_LIVED_MAX_MS = 7 * 24 * 60 * 60 * 1000
 
+const PAGE_SIZE = 100
+// 兜底，避免游标出问题时无限翻页
+const MAX_PAGES = 20
+
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name)
@@ -72,17 +85,27 @@ export class FacebookService {
   }
 
   async listPages(input: string): Promise<LinkablePagesResult> {
-    const info = await friendly(() => inspectToken(input), '校验令牌')
-    assertUsable(info)
-
-    const { token, expiresAt, exchanged } = await this.ensureLongLived(input, info)
-    const pages = await this.fetchPages(token)
+    const resolved = await this.resolveToken(input)
+    const pages = await this.fetchPages(resolved.token)
 
     this.logger.log(
-      `Listed ${pages.length} linkable page(s) from ${info.type} token` +
-        (exchanged ? ' (exchanged for long-lived)' : ''),
+      `Listed ${pages.length} linkable page(s) from ${resolved.info.type} token` +
+        (resolved.exchanged ? ' (exchanged for long-lived)' : ''),
     )
-    return { pages, tokenType: info.type, expiresAt, exchanged }
+    return {
+      pages,
+      tokenType: resolved.info.type,
+      expiresAt: resolved.expiresAt,
+      exchanged: resolved.exchanged,
+    }
+  }
+
+  /** 校验令牌可用，短期的先换成长期。凭证托管存的是返回的这条 token */
+  async resolveToken(input: string): Promise<ResolvedToken> {
+    const info = await friendly(() => inspectToken(input), '校验令牌')
+    assertUsable(info)
+    const upgraded = await this.ensureLongLived(input, info)
+    return { ...upgraded, info }
   }
 
   private async ensureLongLived(token: string, info: TokenInfo) {
@@ -120,10 +143,10 @@ export class FacebookService {
     return ''
   }
 
-  private async fetchPages(token: string): Promise<LinkablePage[]> {
-    const res = await this.fetchAccounts(token)
+  async fetchPages(token: string): Promise<LinkablePage[]> {
+    const rows = await this.fetchAllAccounts(token)
 
-    const pages = (res.data ?? [])
+    const pages = rows
       .filter((p) => p.access_token && p.tasks?.includes('CREATE_CONTENT'))
       .map((p) => {
         const ig = p.instagram_business_account
@@ -152,20 +175,40 @@ export class FacebookService {
   }
 
   /**
+   * 主页多到翻页时，只取第一页会让后面的主页在「可接入」列表里凭空消失，
+   * 而且没有任何报错——自动发现要靠这份列表做 diff，必须取全。
+   */
+  private async fetchAllAccounts(token: string): Promise<AccountsEdge['data']> {
+    const rows: AccountsEdge['data'] = []
+    let after: string | undefined
+
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const res = await this.fetchAccounts(token, after)
+      rows.push(...(res.data ?? []))
+
+      after = res.paging?.cursors?.after
+      if (!after || !res.data?.length) return rows
+    }
+    this.logger.warn(`主页数量超过 ${MAX_PAGES * PAGE_SIZE}，后续分页已忽略`)
+    return rows
+  }
+
+  /**
    * 令牌没有 instagram_basic 时，带上 IG 字段会让整个请求被拒。绑主页是主线，
    * 不能因为读不到 IG 就连主页都列不出来，所以失败后退回只读主页再试一次。
    */
-  private async fetchAccounts(token: string): Promise<AccountsEdge> {
+  private async fetchAccounts(token: string, after?: string): Promise<AccountsEdge> {
+    const params = { limit: String(PAGE_SIZE), ...(after ? { after } : {}) }
     try {
       return await graphGet<AccountsEdge>(
         '/me/accounts',
-        { fields: `${PAGE_FIELDS},${IG_FIELDS}`, limit: '100' },
+        { ...params, fields: `${PAGE_FIELDS},${IG_FIELDS}` },
         token,
       )
     } catch (err) {
       this.logger.warn(`带 Instagram 字段读取主页失败，退回只读主页: ${err}`)
       return friendly(
-        () => graphGet<AccountsEdge>('/me/accounts', { fields: PAGE_FIELDS, limit: '100' }, token),
+        () => graphGet<AccountsEdge>('/me/accounts', { ...params, fields: PAGE_FIELDS }, token),
         '读取主页列表',
       )
     }

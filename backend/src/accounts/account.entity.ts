@@ -4,6 +4,7 @@ import {
 } from 'typeorm'
 import { Exclude } from 'class-transformer'
 import { Proxy } from '../proxies/proxy.entity'
+import { MetaCredential } from '../credentials/meta-credential.entity'
 
 export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook'
 export type AccountStatus = 'active' | 'inactive' | 'banned' | 'warming'
@@ -34,6 +35,20 @@ export class Account {
 
   @Column({ name: 'group_id', nullable: true })
   groupId?: string
+
+  @Column({ name: 'credential_id', type: 'uuid', nullable: true })
+  credentialId?: string
+
+  @ManyToOne(() => MetaCredential, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'credential_id' })
+  credential?: MetaCredential
+
+  /**
+   * 平台侧的账号 id（Facebook 是 pageId，Instagram 是 igUserId）。sessionData 里
+   * 也有一份，但那字段是密码等价物不该拿来做查询；换令牌要按它批量匹配。
+   */
+  @Column({ name: 'external_id', nullable: true })
+  externalId?: string
 
   @Column({ name: 'proxy_id', nullable: true })
   proxyId?: string
