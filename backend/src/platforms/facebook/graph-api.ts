@@ -44,8 +44,9 @@ async function request<T>(url: string, init: RequestInit, timeoutMs = DEFAULT_TI
   return body as T
 }
 
-export function graphGet<T>(path: string, params: Record<string, string>, token: string): Promise<T> {
-  const qs = new URLSearchParams({ ...params, access_token: token })
+/** token 可省：/oauth/access_token 靠 client_secret 鉴权，多带一个 access_token 会被拒 */
+export function graphGet<T>(path: string, params: Record<string, string>, token?: string): Promise<T> {
+  const qs = new URLSearchParams(token ? { ...params, access_token: token } : params)
   return request<T>(`${GRAPH}${path}?${qs}`, { method: 'GET' })
 }
 

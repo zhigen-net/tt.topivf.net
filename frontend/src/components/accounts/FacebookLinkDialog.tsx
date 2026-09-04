@@ -14,6 +14,13 @@ interface LinkablePage {
   accessToken: string
 }
 
+interface LinkablePagesResult {
+  pages: LinkablePage[]
+  tokenType: string
+  expiresAt: number
+  exchanged: boolean
+}
+
 export interface FacebookLinkResult {
   pageId: string
   pageAccessToken: string
@@ -30,14 +37,14 @@ interface Props {
 
 export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
   const [token, setToken] = useState('')
-  const [pages, setPages] = useState<LinkablePage[] | null>(null)
+  const [result, setResult] = useState<LinkablePagesResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) return
     setToken('')
-    setPages(null)
+    setResult(null)
     setLoading(false)
     setError('')
   }, [open])
@@ -46,8 +53,8 @@ export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
     setLoading(true)
     setError('')
     try {
-      const res = await api.post<LinkablePage[]>('/facebook/pages', { token: token.trim() })
-      setPages(res.data)
+      const res = await api.post<LinkablePagesResult>('/facebook/pages', { token: token.trim() })
+      setResult(res.data)
       setToken('')  // 令牌只用于换取主页 token，之后不再留在前端状态里
     } catch (e: any) {
       setError(e?.response?.data?.message ?? '读取主页列表失败')
@@ -74,7 +81,7 @@ export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
           <DialogTitle>绑定 Facebook 主页</DialogTitle>
         </DialogHeader>
 
-        {!pages ? (
+        {!result ? (
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>系统用户令牌 / 长期用户令牌</Label>
@@ -88,7 +95,8 @@ export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
             </div>
             <p className="text-xs text-muted-foreground">
               在商务管理平台「商务设置 → 用户 → 系统用户」生成，需勾选 pages_show_list、
-              pages_read_engagement、pages_manage_posts。令牌只用于换取主页凭证，不会被保存。
+              pages_read_engagement、pages_manage_posts。粘贴图形 API 工具里的短期用户令牌也可以，
+              系统会自动换成长期令牌。令牌只用于换取主页凭证，不会被保存。
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button className="w-full" onClick={loadPages} disabled={token.trim().length < 20 || loading}>
@@ -98,8 +106,11 @@ export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
+            <p className="rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              {describeToken(result)}
+            </p>
             <p className="text-sm text-muted-foreground">选择要接入的主页：</p>
-            {pages.map((p) => (
+            {result.pages.map((p) => (
               <button
                 key={p.pageId}
                 type="button"
@@ -123,4 +134,12 @@ export function FacebookLinkDialog({ open, onClose, onSuccess }: Props) {
       </DialogContent>
     </Dialog>
   )
+}
+
+function describeToken({ tokenType, expiresAt, exchanged }: LinkablePagesResult): string {
+  const kind = tokenType === 'SYSTEM_USER' ? '系统用户令牌' : '用户令牌'
+  const life = expiresAt
+    ? `主页凭证有效期至 ${new Date(expiresAt * 1000).toLocaleDateString('zh-CN')}，到期后需要重新绑定`
+    : '主页凭证永不过期'
+  return `${kind}${exchanged ? '（已自动换成长期令牌）' : ''} · ${life}`
 }
