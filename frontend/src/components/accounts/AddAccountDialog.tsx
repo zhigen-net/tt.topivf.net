@@ -200,8 +200,8 @@ export function AddAccountDialog({ open, onClose }: Props) {
               />
             </div>
 
-            {/* Facebook 走 token 不走 cookie；TikTok 登录成功后不再需要手动粘贴 */}
-            {!isFacebook && (!isTikTok || !hasQrCookies) && (
+            {/* Facebook / Instagram 走 token 不走 cookie；TikTok 登录成功后不再需要手动粘贴 */}
+            {!isMeta && (!isTikTok || !hasQrCookies) && (
               <div className="space-y-1.5">
                 <Label>
                   Cookies / Session
