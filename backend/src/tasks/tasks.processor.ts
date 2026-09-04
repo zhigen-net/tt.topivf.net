@@ -7,6 +7,7 @@ import { PublishTask, TaskResult } from './publish-task.entity'
 import { AccountsService } from '../accounts/accounts.service'
 import { AssetsService } from '../assets/assets.service'
 import { PlatformsService } from '../platforms/platforms.service'
+import { PostsService } from '../posts/posts.service'
 import type { Platform } from '../accounts/account.entity'
 
 @Processor('publish')
@@ -18,6 +19,7 @@ export class TasksProcessor extends WorkerHost {
     private accountsService: AccountsService,
     private platformsService: PlatformsService,
     private assetsService: AssetsService,
+    private posts: PostsService,
   ) {
     super()
   }
@@ -56,6 +58,18 @@ export class TasksProcessor extends WorkerHost {
 
         const result = await adapter.publish(account, task.content)
         results.push({ accountId, platform: account.platform as Platform, ...result })
+
+        if (result.success && result.postId) {
+          await this.posts.record({
+            workspaceId: task.workspaceId,
+            contentId: task.contentId,
+            accountId,
+            platform: account.platform,
+            platformPostId: result.postId,
+            postUrl: result.postUrl,
+            publishedAt: new Date(),
+          })
+        }
         this.logger.log(`Account ${account.username} (${account.platform}): ${result.success ? 'ok' : result.error}`)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)

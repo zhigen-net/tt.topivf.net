@@ -11,6 +11,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module'
 import { AssetsModule } from './assets/assets.module'
 import { ProxiesModule } from './proxies/proxies.module'
 import { AnalyticsModule } from './analytics/analytics.module'
+import { PostsModule } from './posts/posts.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { PlatformsModule } from './platforms/platforms.module'
 import { CryptoModule } from './crypto/crypto.module'
@@ -60,6 +61,7 @@ import appConfig from './config/app.config'
     TasksModule,
     ProxiesModule,
     AnalyticsModule,
+    PostsModule,
     DashboardModule,
     McpModule,
   ],

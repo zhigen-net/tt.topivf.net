@@ -11,6 +11,8 @@ export interface TaskResult {
   accountId: string
   platform: Platform
   success: boolean
+  /** 平台侧的作品 id，posts 表靠它拉数据 */
+  postId?: string
   postUrl?: string
   error?: string
 }
