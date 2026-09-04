@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { api } from '@/lib/api'
 import type { Proxy } from '@/types'
 
@@ -112,6 +113,7 @@ function AddProxyDialog({ open, onClose }: { open: boolean; onClose: () => void 
 export default function ProxiesPage() {
   const qc = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
+  const [removing, setRemoving] = useState<Proxy | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['proxies'],
@@ -120,7 +122,12 @@ export default function ProxiesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/proxies/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['proxies'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proxies'] })
+      // 账号上挂的代理会跟着解绑，列表里的代理列要重新拉
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      setRemoving(null)
+    },
   })
 
   const proxies = data ?? []
@@ -138,7 +145,7 @@ export default function ProxiesPage() {
         size="icon"
         className="h-7 w-7 text-muted-foreground hover:text-destructive"
         title="删除"
-        onClick={() => deleteMutation.mutate(proxy.id)}
+        onClick={() => { deleteMutation.reset(); setRemoving(proxy) }}
         disabled={deleteMutation.isPending}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -229,6 +236,15 @@ export default function ProxiesPage() {
       </div>
 
       <AddProxyDialog open={addOpen} onClose={() => setAddOpen(false)} />
+      <ConfirmDeleteDialog
+        open={!!removing}
+        title="删除代理"
+        description={`删除「${removing?.label ?? `${removing?.host}:${removing?.port}`}」后，正在用它的账号会自动改回直连。确定删除？`}
+        pending={deleteMutation.isPending}
+        error={deleteMutation.error}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && deleteMutation.mutate(removing.id)}
+      />
     </div>
   )
 }

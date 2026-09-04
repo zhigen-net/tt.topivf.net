@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCw, Trash2, Pencil } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
 import { AccountDetailDrawer } from '@/components/accounts/AccountDetailDrawer'
@@ -29,6 +30,7 @@ export default function AccountsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerMode, setDrawerMode] = useState<'view' | 'edit'>('view')
+  const [removing, setRemoving] = useState<Account | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['accounts'],
@@ -48,6 +50,7 @@ export default function AccountsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      setRemoving(null)
     },
   })
 
@@ -62,13 +65,15 @@ export default function AccountsPage() {
   )
 
   function statusToggle(account: Account) {
+    const disabled = account.status === 'inactive'
     return (
       <button
-        title="点击切换启用/停用"
+        title={disabled ? '点击启用' : '点击停用（停用后才出现删除按钮）'}
         disabled={statusToggleMutation.isPending}
+        // 养号/封禁也一键就能停用，否则要先点成正常再点一次才停得掉
         onClick={() => statusToggleMutation.mutate({
           id: account.id,
-          status: account.status === 'active' ? 'inactive' : 'active',
+          status: disabled ? 'active' : 'inactive',
         })}
         className="cursor-pointer disabled:opacity-50"
       >
@@ -90,16 +95,19 @@ export default function AccountsPage() {
         >
           <Pencil className="h-3.5 w-3.5" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          title="删除"
-          onClick={() => deleteMutation.mutate(account.id)}
-          disabled={deleteMutation.isPending}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        {/* 删除入口要先停用才出现，避免在列表里手滑点掉还在跑的账号 */}
+        {account.status === 'inactive' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+            title="删除"
+            onClick={() => { deleteMutation.reset(); setRemoving(account) }}
+            disabled={deleteMutation.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </>
     )
   }
@@ -235,6 +243,20 @@ export default function AccountsPage() {
         account={selectedAccount}
         initialMode={drawerMode}
         onClose={() => setSelectedId(null)}
+      />
+      <ConfirmDeleteDialog
+        open={!!removing}
+        title="删除账号"
+        description={
+          <>
+            删除「{removing?.displayName}」后，它的粉丝历史和发布记录一并消失，且不可恢复。
+            账号在平台上的内容不受影响。确定删除？
+          </>
+        }
+        pending={deleteMutation.isPending}
+        error={deleteMutation.error}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && deleteMutation.mutate(removing.id)}
       />
     </div>
   )

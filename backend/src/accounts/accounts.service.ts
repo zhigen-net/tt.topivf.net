@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, FindOptionsWhere, ILike } from 'typeorm'
 import { Account, Platform, AccountStatus } from './account.entity'
@@ -89,6 +89,10 @@ export class AccountsService {
 
   async remove(id: string, workspaceId: string) {
     const account = await this.findOne(id, workspaceId)
+    // 删号会连带清掉粉丝历史和发布记录，先停用是让人有机会反悔的那道闸
+    if (account.status !== 'inactive') {
+      throw new BadRequestException('请先把账号停用，再执行删除')
+    }
     await this.repo.remove(account)
     await this.browserManager.closeContext(id)
   }

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { NewTaskDialog } from '@/components/tasks/NewTaskDialog'
 import { TaskDetailDialog } from '@/components/tasks/TaskDetailDialog'
 import { api } from '@/lib/api'
@@ -27,6 +28,7 @@ export default function TasksPage() {
   const qc = useQueryClient()
   const [newOpen, setNewOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<PublishTask | null>(null)
+  const [removing, setRemoving] = useState<PublishTask | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks'],
@@ -39,6 +41,7 @@ export default function TasksPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      setRemoving(null)
     },
   })
 
@@ -51,7 +54,7 @@ export default function TasksPage() {
         size="icon"
         className="h-7 w-7 text-muted-foreground hover:text-destructive"
         title={task.status === 'running' ? '执行中不能删除' : '删除'}
-        onClick={() => deleteMutation.mutate(task.id)}
+        onClick={() => { deleteMutation.reset(); setRemoving(task) }}
         disabled={deleteMutation.isPending || task.status === 'running'}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -159,6 +162,15 @@ export default function TasksPage() {
 
       <NewTaskDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <TaskDetailDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
+      <ConfirmDeleteDialog
+        open={!!removing}
+        title="删除任务"
+        description={`删除「${removing?.content?.title ?? '这条任务'}」后，执行结果和发布链接一并消失，已经发到平台上的内容不受影响。确定删除？`}
+        pending={deleteMutation.isPending}
+        error={deleteMutation.error}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && deleteMutation.mutate(removing.id)}
+      />
     </div>
   )
 }
