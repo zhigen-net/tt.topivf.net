@@ -97,7 +97,9 @@ export class CredentialsService {
     )
 
     const created: Account[] = []
+    const adopted: string[] = []
     const skipped: string[] = []
+    const claimable = await this.findClaimable(workspaceId, targets.map((t) => t.externalId))
 
     for (const target of targets) {
       const found = locate(pages, target)
@@ -112,6 +114,15 @@ export class CredentialsService {
       })
       if (exists) {
         skipped.push(`${found.username}（已接入）`)
+        continue
+      }
+      const claim = claimable.get(keyOf(target.platform, target.externalId))
+      if (claim) {
+        claim.credentialId = credential.id
+        claim.externalId = target.externalId
+        claim.sessionData = found.sessionData
+        await this.accounts.save(claim)
+        adopted.push(found.username)
         continue
       }
       created.push(await this.accounts.save(this.accounts.create({
@@ -130,10 +141,13 @@ export class CredentialsService {
     }
 
     await this.discover(id, workspaceId)
-    this.logger.log(`凭证「${credential.label}」接入 ${created.length} 个账号，跳过 ${skipped.length} 个`)
+    this.logger.log(
+      `凭证「${credential.label}」新建 ${created.length} 个账号，认领 ${adopted.length} 个，跳过 ${skipped.length} 个`,
+    )
     // 只回必要字段：账号实体带着 sessionData，那是主页令牌
     return {
       created: created.length,
+      adopted,
       skipped,
       accounts: created.map((a) => ({ id: a.id, platform: a.platform, username: a.username })),
     }
@@ -279,14 +293,34 @@ export class CredentialsService {
     const linked = ids.length
       ? await this.accounts.findBy({ workspaceId, externalId: In(ids) })
       : []
-    const byExternalId = new Map(linked.map((a) => [a.externalId as string, a.id]))
+    const byKey = new Map(linked.map((a) => [keyOf(a.platform, a.externalId as string), a.id]))
+    const claimable = await this.findClaimable(workspaceId, ids)
     const stats = indexTargets(pages)
 
-    return targets.map((t) => ({
-      ...t,
-      followers: stats.get(t.externalId)?.followers ?? 0,
-      linkedAccountId: byExternalId.get(t.externalId),
-    }))
+    return targets.map((t) => {
+      const key = keyOf(t.platform, t.externalId)
+      return {
+        ...t,
+        followers: stats.get(t.externalId)?.followers ?? 0,
+        linkedAccountId: byKey.get(key) ?? claimable.get(key)?.id,
+      }
+    })
+  }
+
+  /**
+   * 手动粘令牌建的老账号 external_id 是空的，按 id 匹配一律落空——它们会在「可接入」
+   * 列表里被当成新目标，接入时再建一个重复账号。这里按 sessionData 里的平台侧 id
+   * 把它们找回来，交给调用方认领而不是新建。
+   */
+  private async findClaimable(workspaceId: string, ids: string[]): Promise<Map<string, Account>> {
+    if (!ids.length) return new Map()
+    const rows = await this.accounts
+      .createQueryBuilder('a')
+      .where('a.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('a.external_id IS NULL')
+      .andWhere("COALESCE(a.session_data->>'pageId', a.session_data->>'igUserId') IN (:...ids)", { ids })
+      .getMany()
+    return new Map(rows.map((a) => [keyOf(a.platform, platformIdOf(a)), a]))
   }
 
   private async countAccounts(ids: string[]): Promise<Map<string, number>> {
@@ -308,6 +342,14 @@ export class CredentialsService {
       )
     }
   }
+}
+
+/** 主页 id 和 IG 用户 id 各有各的命名空间，只用 id 做键会串台 */
+const keyOf = (platform: string, externalId: string) => `${platform}:${externalId}`
+
+function platformIdOf(account: Account): string {
+  const s = account.sessionData as Record<string, string> | undefined
+  return s?.pageId ?? s?.igUserId ?? ''
 }
 
 interface ResolvedTarget {

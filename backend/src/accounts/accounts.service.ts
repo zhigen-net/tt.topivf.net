@@ -40,7 +40,9 @@ export class AccountsService {
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
-      relations: { proxy: true },
+      relations: { proxy: true, credential: true },
+      // 只取展示要用的三个字段，加密令牌连查都不查出来，不指望序列化去兜底
+      select: { credential: { id: true, label: true, status: true } },
     })
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
@@ -54,7 +56,11 @@ export class AccountsService {
   }
 
   async findOne(id: string, workspaceId: string) {
-    const account = await this.repo.findOne({ where: { id, workspaceId }, relations: { proxy: true } })
+    const account = await this.repo.findOne({
+      where: { id, workspaceId },
+      relations: { proxy: true, credential: true },
+      select: { credential: { id: true, label: true, status: true } },
+    })
     if (!account) throw new NotFoundException(`Account ${id} not found`)
     return account
   }

@@ -1,12 +1,16 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, KeyRound, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
+import { useWorkspace } from '@/lib/workspace'
+import { STATUS_LABELS, STATUS_VARIANTS } from '@/pages/credentials/credential-labels'
 import { describeToken, type LinkablePagesResult } from './FacebookLinkDialog'
 import type { Account, AccountStatus, Proxy } from '@/types'
 
@@ -110,6 +114,9 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
         </div>
       </div>
 
+      {isMeta && account.credential ? (
+        <ManagedCredential credential={account.credential} />
+      ) : (
       <div className="space-y-1.5">
         <Label>更新登录凭证 <span className="text-muted-foreground">（留空则保持不变）</span></Label>
         {isMeta ? (
@@ -128,6 +135,7 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
           />
         )}
       </div>
+      )}
 
       {mutation.isError && <p className="text-sm text-destructive">保存失败，请重试。</p>}
 
@@ -137,6 +145,32 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
           {mutation.isPending ? '保存中…' : '保存修改'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * 托管中的账号不给粘令牌的入口：在这里单独换一次只会改掉 sessionData，
+ * 账号仍然指向原来那条凭证，下次批量刷新又会被覆盖回去。
+ */
+function ManagedCredential({ credential }: { credential: NonNullable<Account['credential']> }) {
+  const { isManager } = useWorkspace()
+
+  return (
+    <div className="space-y-1.5">
+      <Label>登录凭证</Label>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+        <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-sm">由凭证「{credential.label}」托管</span>
+        <Badge variant={STATUS_VARIANTS[credential.status]}>{STATUS_LABELS[credential.status]}</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        换令牌、刷新主页凭证请到
+        {isManager
+          ? <Link to="/workspace/credentials" className="mx-1 underline underline-offset-2">授权凭证</Link>
+          : <span className="mx-1">「工作空间 → 授权凭证」</span>}
+        统一操作，改一次全部下挂账号一起生效。
+      </p>
     </div>
   )
 }

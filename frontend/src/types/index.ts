@@ -58,6 +58,10 @@ export interface Account {
   status: AccountStatus
   proxyId?: string
   groupId?: string
+  credentialId?: string
+  /** 平台侧账号 id：Facebook 是 pageId，Instagram 是 igUserId */
+  externalId?: string
+  credential?: Pick<MetaCredential, 'id' | 'label' | 'status'>
   followers: number
   following: number
   postsCount: number

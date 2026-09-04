@@ -8,6 +8,13 @@ import { TargetPicker, useTargetSelection } from './TargetPicker'
 import { errorText } from './AddCredentialDialog'
 import type { DiscoveredTarget, MetaCredential } from '@/types'
 
+interface LinkResult {
+  created: number
+  /** 早先手动添加、这次被归到凭证下的账号名 */
+  adopted: string[]
+  skipped: string[]
+}
+
 /** 用已存的令牌重新拉一次名下账号，勾选后批量接入 */
 export function LinkTargetsDialog({ credential, onClose }: {
   credential: MetaCredential | null
@@ -22,12 +29,17 @@ export function LinkTargetsDialog({ credential, onClose }: {
   })
 
   const link = useMutation({
-    mutationFn: () => api.post(`/credentials/${credential?.id}/link`, {
+    mutationFn: () => api.post<LinkResult>(`/credentials/${credential?.id}/link`, {
       targets: selection.chosen(discover.data?.data ?? []),
     }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['credentials'] })
       qc.invalidateQueries({ queryKey: ['accounts'] })
+      const { created, adopted } = res.data
+      // 认领是静默改已有账号，不说一声用户会以为没接入成功
+      if (adopted.length) {
+        alert(`新建 ${created} 个账号；另有 ${adopted.length} 个早先手动添加的账号已归到这条凭证下：${adopted.join('、')}`)
+      }
       onClose()
     },
   })

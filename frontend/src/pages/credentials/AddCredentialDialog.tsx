@@ -42,12 +42,17 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
   })
 
   const link = useMutation({
-    mutationFn: () => api.post(`/credentials/${created?.credential.id}/link`, {
-      targets: selection.chosen(created?.targets ?? []),
-    }),
-    onSuccess: () => {
+    mutationFn: () => api.post<{ created: number; adopted: string[] }>(
+      `/credentials/${created?.credential.id}/link`,
+      { targets: selection.chosen(created?.targets ?? []) },
+    ),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['credentials'] })
       qc.invalidateQueries({ queryKey: ['accounts'] })
+      const { created: n, adopted } = res.data
+      if (adopted.length) {
+        alert(`新建 ${n} 个账号；另有 ${adopted.length} 个早先手动添加的账号已归到这条凭证下：${adopted.join('、')}`)
+      }
       onClose()
     },
   })
