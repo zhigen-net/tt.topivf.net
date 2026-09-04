@@ -8,6 +8,7 @@ import AccountsPage from '@/pages/accounts/AccountsPage'
 import ContentsPage from '@/pages/contents/ContentsPage'
 import AssetsPage from '@/pages/assets/AssetsPage'
 import WorkspacePage from '@/pages/workspace/WorkspacePage'
+import { WorkspaceLayout } from '@/pages/workspace/WorkspaceLayout'
 import TasksPage from '@/pages/tasks/TasksPage'
 import ProxiesPage from '@/pages/proxies/ProxiesPage'
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
@@ -46,12 +47,17 @@ export default function App() {
               <Route element={<Layout />}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/accounts" element={<AccountsPage />} />
-                <Route path="/credentials" element={<CredentialsPage />} />
                 <Route path="/contents" element={<ContentsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/workspace" element={<WorkspacePage />} />
-                <Route path="/proxies" element={<ProxiesPage />} />
+                <Route path="/workspace" element={<WorkspaceLayout />}>
+                  <Route index element={<WorkspacePage />} />
+                  <Route path="credentials" element={<CredentialsPage />} />
+                  <Route path="proxies" element={<ProxiesPage />} />
+                </Route>
+                {/* 这两个页面搬进工作空间了，老链接和书签别 404 */}
+                <Route path="/credentials" element={<Navigate to="/workspace/credentials" replace />} />
+                <Route path="/proxies" element={<Navigate to="/workspace/proxies" replace />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/mcp" element={<McpPage />} />
                 <Route path="/profile" element={<ProfilePage />} />

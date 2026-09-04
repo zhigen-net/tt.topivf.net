@@ -147,12 +147,9 @@ export default function ProxiesPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
+    <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">代理管理</h1>
-          <p className="text-muted-foreground text-sm mt-1">共 {proxies.length} 个代理</p>
-        </div>
+        <p className="text-muted-foreground text-sm">共 {proxies.length} 个代理</p>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" size="icon" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />

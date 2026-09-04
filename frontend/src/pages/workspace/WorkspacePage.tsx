@@ -23,26 +23,13 @@ const ROLE_HINTS: Record<WorkspaceRole, string> = {
 
 export default function WorkspacePage() {
   const { isAdmin } = useMe()
-  const { workspace, isManager, isLoading } = useWorkspace()
+  const { workspace, isManager } = useWorkspace()
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">加载中…</div>
-  if (!workspace) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-muted-foreground">你还没有加入任何工作空间，请联系平台管理员。</p>
-      </div>
-    )
-  }
+  // 加载中和「没有空间」都由外层 WorkspaceLayout 处理了
+  if (!workspace) return null
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      <div>
-        <h1 className="text-xl font-bold sm:text-2xl">空间设置</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          当前空间「{workspace.name}」· 我的角色：{WORKSPACE_ROLE_LABELS[workspace.role]}
-        </p>
-      </div>
-
+    <div className="space-y-4">
       {isManager && <RenameCard workspace={workspace} />}
       <MembersCard workspace={workspace} canManage={isManager} />
       {isAdmin && <AllWorkspacesCard currentId={workspace.id} />}

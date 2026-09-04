@@ -29,14 +29,11 @@ export default function CredentialsPage() {
   const credentials = data ?? []
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold">授权凭证</h1>
-          <p className="text-sm text-muted-foreground">
-            一条令牌可以接入名下所有主页和 Instagram 账号，换令牌时无需逐个账号重新绑定
-          </p>
-        </div>
+        <p className="min-w-0 max-w-2xl text-sm text-muted-foreground">
+          一条令牌可以接入名下所有主页和 Instagram 账号，换令牌时无需逐个账号重新绑定
+        </p>
         <Button className="shrink-0" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
           添加凭证
