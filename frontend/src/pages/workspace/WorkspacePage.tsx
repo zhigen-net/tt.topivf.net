@@ -16,8 +16,8 @@ import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 import type { User, Workspace, WorkspaceMember, WorkspaceRole } from '@/types'
 
 const ROLE_HINTS: Record<WorkspaceRole, string> = {
-  manager: '可管理成员、改空间设置，并删除空间内的任何数据',
-  member: '可创建、审核、发布作品，可加账号和代理；只能删自己空间里的草稿',
+  manager: '可管理成员、授权凭证和代理，改空间设置，并删除空间内的任何数据',
+  member: '可创建、审核、发布作品，可添加账号；只能删自己空间里的草稿',
   viewer: '只能查看，不能做任何修改',
 }
 

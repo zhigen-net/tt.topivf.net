@@ -5,12 +5,12 @@ import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 
 const TABS = [
   { to: '/workspace', label: '空间设置', end: true },
-  { to: '/workspace/credentials', label: '授权凭证' },
-  { to: '/workspace/proxies', label: '代理管理' },
+  { to: '/workspace/credentials', label: '授权凭证', managerOnly: true },
+  { to: '/workspace/proxies', label: '代理管理', managerOnly: true },
 ]
 
 export function WorkspaceLayout() {
-  const { workspace, isLoading } = useWorkspace()
+  const { workspace, isManager, isLoading } = useWorkspace()
 
   if (isLoading) return <div className="p-4 text-sm text-muted-foreground sm:p-6">加载中…</div>
   if (!workspace) {
@@ -31,7 +31,7 @@ export function WorkspaceLayout() {
       </div>
 
       <nav className="flex gap-1 overflow-x-auto border-b">
-        {TABS.map(({ to, label, end }) => (
+        {TABS.filter((t) => !t.managerOnly || isManager).map(({ to, label, end }) => (
           <NavLink
             key={to}
             to={to}

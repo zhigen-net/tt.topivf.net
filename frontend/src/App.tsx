@@ -18,6 +18,7 @@ import CredentialsPage from '@/pages/credentials/CredentialsPage'
 import ProfilePage from '@/pages/profile/ProfilePage'
 import UsersPage from '@/pages/users/UsersPage'
 import { useMe } from '@/lib/auth'
+import { useWorkspace } from '@/lib/workspace'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,12 @@ function RequireAdmin() {
   return isAdmin ? <Outlet /> : <Navigate to="/" replace />
 }
 
+function RequireWorkspaceManager() {
+  const { isManager, isLoading } = useWorkspace()
+  if (isLoading) return null
+  return isManager ? <Outlet /> : <Navigate to="/workspace" replace />
+}
+
 export default function App() {
   return (
     <ErrorBoundary scope="应用">
@@ -52,8 +59,10 @@ export default function App() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/workspace" element={<WorkspaceLayout />}>
                   <Route index element={<WorkspacePage />} />
-                  <Route path="credentials" element={<CredentialsPage />} />
-                  <Route path="proxies" element={<ProxiesPage />} />
+                  <Route element={<RequireWorkspaceManager />}>
+                    <Route path="credentials" element={<CredentialsPage />} />
+                    <Route path="proxies" element={<ProxiesPage />} />
+                  </Route>
                 </Route>
                 {/* 这两个页面搬进工作空间了，老链接和书签别 404 */}
                 <Route path="/credentials" element={<Navigate to="/workspace/credentials" replace />} />

@@ -9,7 +9,8 @@ import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../wo
 
 @ApiTags('credentials')
 @ApiBearerAuth()
-@MinWorkspaceRole('viewer')
+// 令牌是整个商务管理平台的发布权限，读写一律限管理员
+@MinWorkspaceRole('manager')
 @Controller('credentials')
 export class CredentialsController {
   constructor(private readonly svc: CredentialsService) {}
@@ -20,19 +21,16 @@ export class CredentialsController {
   }
 
   @Post()
-  @MinWorkspaceRole('manager')
   create(@Body() dto: CreateCredentialDto, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.create(dto.label, dto.token, ws.id)
   }
 
   @Post(':id/discover')
-  @MinWorkspaceRole('member')
   discover(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.discover(id, ws.id)
   }
 
   @Post(':id/link')
-  @MinWorkspaceRole('member')
   link(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: LinkTargetsDto,
@@ -42,14 +40,11 @@ export class CredentialsController {
   }
 
   @Post(':id/refresh')
-  @MinWorkspaceRole('member')
   refresh(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.refresh(id, ws.id)
   }
 
-  // 换令牌等于交出整个商务管理平台的发布权限，跟建凭证同级
   @Post(':id/rotate')
-  @MinWorkspaceRole('manager')
   rotate(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RotateTokenDto,
@@ -59,7 +54,6 @@ export class CredentialsController {
   }
 
   @Delete(':id')
-  @MinWorkspaceRole('manager')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.remove(id, ws.id)
