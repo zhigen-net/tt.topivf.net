@@ -19,7 +19,7 @@ export class UsersController {
 
   @Patch('me')
   updateProfile(@CurrentUser() me: User, @Body() dto: UpdateProfileDto) {
-    return this.svc.updateProfile(me.id, dto.displayName)
+    return this.svc.updateProfile(me.id, dto)
   }
 
   @Patch('me/password')

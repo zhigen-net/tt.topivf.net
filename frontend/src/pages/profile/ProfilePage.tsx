@@ -17,18 +17,22 @@ export default function ProfilePage() {
   const { me, isAdmin } = useMe()
   const { workspaces } = useWorkspace()
   const [displayName, setDisplayName] = useState('')
+  const [email, setEmail] = useState('')
   const [passwordOpen, setPasswordOpen] = useState(false)
 
   useEffect(() => {
-    if (me) setDisplayName(me.displayName)
+    if (!me) return
+    setDisplayName(me.displayName)
+    setEmail(me.email ?? '')
   }, [me])
 
   const save = useMutation({
-    mutationFn: () => api.patch('/users/me', { displayName: displayName.trim() }),
+    mutationFn: () => api.patch('/users/me', { displayName: displayName.trim(), email: email.trim() }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 
-  const dirty = Boolean(me) && displayName.trim() !== me?.displayName && displayName.trim().length > 0
+  const changed = displayName.trim() !== me?.displayName || email.trim() !== (me?.email ?? '')
+  const dirty = Boolean(me) && changed && displayName.trim().length > 0
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -47,6 +51,18 @@ export default function ProfilePage() {
             <div className="space-y-1.5">
               <Label>用户名</Label>
               <Input value={me?.username ?? ''} disabled />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email">邮箱</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="选填"
+                autoComplete="email"
+              />
+              <p className="text-xs text-muted-foreground">填了之后，登录时用邮箱代替用户名也可以</p>
             </div>
             <div className="space-y-1.5">
               <Label>显示名称</Label>

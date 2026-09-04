@@ -42,6 +42,8 @@ export interface Asset {
 export interface User {
   id: string
   username: string
+  /** 可选的第二登录名 */
+  email?: string | null
   displayName: string
   role: UserRole
   isActive: boolean

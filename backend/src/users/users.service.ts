@@ -6,9 +6,14 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Not, Repository } from 'typeorm'
 import * as bcrypt from 'bcryptjs'
 import { User } from './user.entity'
-import { ChangePasswordDto, CreateUserDto, UpdateUserDto } from './dto/user.dto'
+import { ChangePasswordDto, CreateUserDto, UpdateProfileDto, UpdateUserDto } from './dto/user.dto'
 
 const ROUNDS = 10
+
+/** 邮箱大小写不敏感，统一按小写存，登录时也按小写比 */
+function normalizeEmail(email?: string | null) {
+  return email?.trim().toLowerCase() || null
+}
 
 @Injectable()
 export class UsersService implements OnModuleInit {
@@ -50,22 +55,32 @@ export class UsersService implements OnModuleInit {
   searchActive(search: string, excludeIds: string[]) {
     const qb = this.repo.createQueryBuilder('u')
       .where('u.isActive = true')
-      .andWhere('(u.username ILIKE :search OR u.displayName ILIKE :search)', { search: `%${search}%` })
+      .andWhere(
+        '(u.username ILIKE :search OR u.displayName ILIKE :search OR u.email ILIKE :search)',
+        { search: `%${search}%` },
+      )
     if (excludeIds.length) qb.andWhere('u.id NOT IN (:...excludeIds)', { excludeIds })
     return qb.orderBy('u.username', 'ASC').take(20).getMany()
   }
 
-  /** 登录用：按用户名取回带哈希的记录 */
-  findByUsername(username: string) {
-    return this.repo.findOneBy({ username })
+  /** 登录用：用户名或邮箱都收，取回带哈希的记录 */
+  findByLogin(identifier: string) {
+    const value = identifier.trim()
+    return this.repo.createQueryBuilder('u')
+      .where('u.username = :value OR u.email = :email', { value, email: value.toLowerCase() })
+      .getOne()
   }
 
   async create(dto: CreateUserDto) {
     if (await this.repo.findOneBy({ username: dto.username })) {
       throw new ConflictException('用户名已存在')
     }
+    const email = normalizeEmail(dto.email)
+    if (email) await this.assertEmailFree(email)
+
     return this.repo.save(this.repo.create({
       username: dto.username,
+      email,
       passwordHash: await bcrypt.hash(dto.password, ROUNDS),
       displayName: dto.displayName,
       role: dto.role ?? 'user',
@@ -78,13 +93,26 @@ export class UsersService implements OnModuleInit {
     if (user.role === 'admin' && losingAdmin) await this.assertNotLastAdmin(id)
 
     Object.assign(user, dto)
+    if (dto.email !== undefined) user.email = await this.claimEmail(dto.email, id)
     return this.repo.save(user)
   }
 
-  async updateProfile(id: string, displayName: string) {
+  async updateProfile(id: string, dto: UpdateProfileDto) {
     const user = await this.findOne(id)
-    user.displayName = displayName
+    user.displayName = dto.displayName
+    if (dto.email !== undefined) user.email = await this.claimEmail(dto.email, id)
     return this.repo.save(user)
+  }
+
+  private async claimEmail(raw: string | null, ownerId: string) {
+    const email = normalizeEmail(raw)
+    if (email) await this.assertEmailFree(email, ownerId)
+    return email
+  }
+
+  private async assertEmailFree(email: string, excludeId?: string) {
+    const owner = await this.repo.findOneBy({ email })
+    if (owner && owner.id !== excludeId) throw new ConflictException('邮箱已被其它账号使用')
   }
 
   async resetPassword(id: string, password: string) {

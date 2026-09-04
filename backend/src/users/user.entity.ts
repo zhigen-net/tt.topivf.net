@@ -11,6 +11,13 @@ export class User {
   @Column({ unique: true })
   username: string
 
+  /**
+   * 可选的第二登录名。用户名的字符集里没有 @，两者不会撞到一起，
+   * 所以登录时同一个输入框拿去比这两列是安全的。存之前统一转小写。
+   */
+  @Column({ unique: true, nullable: true })
+  email?: string | null
+
   // ClassSerializerInterceptor 靠这个把哈希挡在响应外，返回值必须保持类实例
   @Exclude()
   @Column({ name: 'password_hash' })

@@ -119,7 +119,9 @@ export default function UsersPage() {
                     {u.displayName}
                     {u.id === me?.id && <span className="ml-1.5 text-xs text-muted-foreground">（我）</span>}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">@{u.username}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    @{u.username}{u.email && ` · ${u.email}`}
+                  </p>
                 </div>
                 {roleBadge(u)}
               </div>
@@ -152,7 +154,9 @@ export default function UsersPage() {
                       {u.displayName}
                       {u.id === me?.id && <span className="ml-1.5 text-xs text-muted-foreground">（我）</span>}
                     </p>
-                    <p className="text-xs text-muted-foreground">@{u.username}</p>
+                    <p className="text-xs text-muted-foreground">
+                      @{u.username}{u.email && ` · ${u.email}`}
+                    </p>
                   </td>
                   <td className="px-3 py-2">{roleBadge(u)}</td>
                   <td className="px-3 py-2">{activeToggle(u)}</td>
@@ -200,6 +204,7 @@ export default function UsersPage() {
 function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | null; onClose: () => void }) {
   const qc = useQueryClient()
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('user')
@@ -207,6 +212,7 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
   useEffect(() => {
     if (!open) return
     setUsername(user?.username ?? '')
+    setEmail(user?.email ?? '')
     setDisplayName(user?.displayName ?? '')
     setRole(user?.role ?? 'user')
     setPassword('')
@@ -215,8 +221,8 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
   const mutation = useMutation({
     mutationFn: (): Promise<unknown> =>
       user
-        ? api.patch(`/users/${user.id}`, { displayName, role })
-        : api.post('/users', { username, password, displayName, role }),
+        ? api.patch(`/users/${user.id}`, { displayName, role, email: email.trim() })
+        : api.post('/users', { username, password, displayName, role, email: email.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
       onClose()
@@ -245,6 +251,16 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
               autoComplete="off"
             />
             {user && <p className="text-xs text-muted-foreground">用户名创建后不能修改</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label>邮箱</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="选填，可用于登录"
+              autoComplete="off"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>显示名称</Label>

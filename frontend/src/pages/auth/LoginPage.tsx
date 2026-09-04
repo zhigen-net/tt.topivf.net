@@ -49,7 +49,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="username">用户名</Label>
+            <Label htmlFor="username">用户名或邮箱</Label>
             <Input
               id="username"
               value={username}
