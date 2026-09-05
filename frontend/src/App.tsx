@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard'
 import AccountsPage from '@/pages/accounts/AccountsPage'
 import ContentsPage from '@/pages/contents/ContentsPage'
 import AssetsPage from '@/pages/assets/AssetsPage'
+import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import WorkspacePage from '@/pages/workspace/WorkspacePage'
 import { WorkspaceLayout } from '@/pages/workspace/WorkspaceLayout'
 import TasksPage from '@/pages/tasks/TasksPage'
@@ -74,8 +75,7 @@ export default function App() {
                 {/* 这两个页面搬进工作空间了，老链接和书签别 404 */}
                 <Route path="/credentials" element={<Navigate to="/workspace/credentials" replace />} />
                 <Route path="/proxies" element={<Navigate to="/workspace/proxies" replace />} />
-                {/* 数据分析并进概览了 */}
-                <Route path="/analytics" element={<Navigate to="/" replace />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/mcp" element={<McpPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route element={<RequireAdmin />}>

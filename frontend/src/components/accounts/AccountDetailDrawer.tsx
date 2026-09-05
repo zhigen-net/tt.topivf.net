@@ -4,8 +4,9 @@ import {
   RefreshCw, CheckCircle2, XCircle, Clock, Wifi, WifiOff,
   Users, UserCheck, Film, Pencil, ExternalLink,
 } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Drawer, DrawerContent, DrawerHeader, DrawerBody, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +18,8 @@ import {
 } from './constants'
 import { AccountEditForm } from './AccountEditForm'
 import { api } from '@/lib/api'
-import type { Account, PaginatedResponse, Proxy, PublishTask, TaskStatus } from '@/types'
+import { formatCount } from '@/lib/utils'
+import type { Account, PaginatedResponse, Proxy, PublishTask, Stats, TaskStatus } from '@/types'
 
 // 记录本次页面会话内已自动同步过的账号，避免重复请求
 const autoSyncedIds = new Set<string>()
@@ -168,10 +170,11 @@ export function AccountDetailDrawer({ account, initialMode = 'view', onClose }: 
           >
             {syncError && <p className="text-xs text-destructive mb-2">{syncError}</p>}
             <div className="grid grid-cols-3 divide-x rounded-xl border bg-muted/30 py-3">
-              <StatCell icon={<Users className="h-3.5 w-3.5" />} label="粉丝" value={fmtNum(display?.followers ?? 0)} loading={syncing} />
-              <StatCell icon={<UserCheck className="h-3.5 w-3.5" />} label="关注" value={fmtNum(display?.following ?? 0)} loading={syncing} />
-              <StatCell icon={<Film className="h-3.5 w-3.5" />} label="作品" value={fmtNum(display?.postsCount ?? 0)} loading={syncing} />
+              <StatCell icon={<Users className="h-3.5 w-3.5" />} label="粉丝" value={formatCount(display?.followers ?? 0)} loading={syncing} />
+              <StatCell icon={<UserCheck className="h-3.5 w-3.5" />} label="关注" value={formatCount(display?.following ?? 0)} loading={syncing} />
+              <StatCell icon={<Film className="h-3.5 w-3.5" />} label="作品" value={formatCount(display?.postsCount ?? 0)} loading={syncing} />
             </div>
+            <FollowerTrend accountId={account.id} />
           </Section>
 
           <Section title={`发布记录${records.length > 0 ? ` · ${tasks?.total ?? records.length}` : ''}`}>
@@ -321,8 +324,40 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-function fmtNum(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
+/**
+ * 后台每天给账号留一张快照，接口按时间倒序返回最近 30 条。只有一天的数据连不成线，
+ * 与其画一个点不如说清楚还要等。
+ */
+function FollowerTrend({ accountId }: { accountId: string }) {
+  const { data } = useQuery({
+    queryKey: ['analytics', 'account', accountId],
+    queryFn: () => api.get<Stats[]>(`/analytics/accounts/${accountId}`).then((r) => r.data),
+  })
+
+  if (!data) return null
+  if (data.length < 2) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        粉丝趋势要攒够两天数据才画得出来，目前 {data.length} 天。
+      </p>
+    )
+  }
+
+  const points = [...data].reverse().map((s) => ({
+    date: format(new Date(s.recordedAt), 'MM-dd'),
+    followers: s.followers,
+  }))
+
+  return (
+    <div className="mt-2 rounded-xl border p-2">
+      <ResponsiveContainer width="100%" height={140}>
+        <LineChart data={points} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+          <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={16} />
+          <YAxis tick={{ fontSize: 10 }} tickFormatter={formatCount} width={40} domain={['dataMin', 'dataMax']} />
+          <Tooltip formatter={(v) => [Number(v).toLocaleString(), '粉丝']} />
+          <Line type="monotone" dataKey="followers" stroke="#6366f1" strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
 }

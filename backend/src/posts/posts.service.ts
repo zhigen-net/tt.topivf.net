@@ -1,9 +1,44 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { DataSource, Repository } from 'typeorm'
+import { DataSource, In, Repository } from 'typeorm'
 import { Post } from './post.entity'
+import { Account } from '../accounts/account.entity'
+import { Content } from '../contents/content.entity'
+import type { QueryPostsDto } from './dto/query-posts.dto'
 import type { PostMetrics } from '../platforms/platform.adapter'
 import type { Platform } from '../accounts/account.entity'
+
+/** 展示用的账号信息，只挑不敏感的几个字段 */
+export interface PostAccountBrief {
+  id: string
+  username: string
+  displayName: string
+  platform: Platform
+  avatar?: string
+}
+
+export type PostWithRefs = Post & {
+  account?: PostAccountBrief
+  contentTitle?: string
+}
+
+export interface PostsSummary {
+  posts: number
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  /** 已经成功拉到过指标的条数，用来说明合计数覆盖了多少 */
+  measured: number
+}
+
+export interface Paginated<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
 
 export interface RecordPostInput {
   workspaceId?: string
@@ -21,6 +56,8 @@ export class PostsService implements OnModuleInit {
 
   constructor(
     @InjectRepository(Post) private readonly repo: Repository<Post>,
+    @InjectRepository(Account) private readonly accounts: Repository<Account>,
+    @InjectRepository(Content) private readonly contents: Repository<Content>,
     private readonly ds: DataSource,
   ) {}
 
@@ -53,6 +90,89 @@ export class PostsService implements OnModuleInit {
       where: { accountId, workspaceId },
       order: { publishedAt: 'DESC' },
       take,
+    })
+  }
+
+  async findAll(workspaceId: string, opts: QueryPostsDto): Promise<Paginated<PostWithRefs>> {
+    const { contentId, accountId, platform, sort = 'publishedAt', page = 1, limit = 20 } = opts
+
+    const qb = this.repo
+      .createQueryBuilder('p')
+      .where('p.workspaceId = :workspaceId', { workspaceId })
+      .orderBy(`p.${sort}`, 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+
+    if (contentId) qb.andWhere('p.contentId = :contentId', { contentId })
+    if (accountId) qb.andWhere('p.accountId = :accountId', { accountId })
+    if (platform) qb.andWhere('p.platform = :platform', { platform })
+
+    // 按指标排序时把没拉到过数据的排到最后，否则一堆 0 会顶在排行榜前面
+    if (sort !== 'publishedAt') qb.addOrderBy('p.publishedAt', 'DESC')
+
+    const [data, total] = await qb.getManyAndCount()
+    return {
+      data: await this.attachRefs(data, workspaceId),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    }
+  }
+
+  /** 概览卡片用的合计，和列表分页无关，所以单独一次聚合 */
+  async summary(workspaceId: string): Promise<PostsSummary> {
+    const row = await this.repo
+      .createQueryBuilder('p')
+      .select('COUNT(*)::int', 'posts')
+      .addSelect('COALESCE(SUM(p.views), 0)::int', 'views')
+      .addSelect('COALESCE(SUM(p.likes), 0)::int', 'likes')
+      .addSelect('COALESCE(SUM(p.comments), 0)::int', 'comments')
+      .addSelect('COALESCE(SUM(p.shares), 0)::int', 'shares')
+      .addSelect('COUNT(p.metrics_updated_at)::int', 'measured')
+      .where('p.workspaceId = :workspaceId', { workspaceId })
+      .getRawOne<PostsSummary>()
+
+    return row ?? { posts: 0, views: 0, likes: 0, comments: 0, shares: 0, measured: 0 }
+  }
+
+  /**
+   * posts 上只有 uuid，前端拿一串 id 没法展示。整页涉及的账号和作品各查一次贴回去，
+   * 逐条查会打满连接池。同 TasksService.attachAccounts。
+   */
+  private async attachRefs(posts: Post[], workspaceId: string): Promise<PostWithRefs[]> {
+    const accountIds = [...new Set(posts.map((p) => p.accountId))]
+    const contentIds = [...new Set(posts.map((p) => p.contentId))]
+
+    const accounts: Account[] = accountIds.length
+      ? await this.accounts.find({
+          where: { id: In(accountIds), workspaceId },
+          select: { id: true, username: true, displayName: true, platform: true, avatar: true },
+        })
+      : []
+    const contents: Content[] = contentIds.length
+      ? await this.contents.find({
+          where: { id: In(contentIds), workspaceId },
+          select: { id: true, title: true },
+        })
+      : []
+
+    const byAccount = new Map(accounts.map((a) => [a.id, a]))
+    const byContent = new Map(contents.map((c) => [c.id, c]))
+
+    return posts.map((p) => {
+      const account = byAccount.get(p.accountId)
+      const content = byContent.get(p.contentId)
+      return Object.assign(p, {
+        account: account && {
+          id: account.id,
+          username: account.username,
+          displayName: account.displayName,
+          platform: account.platform,
+          avatar: account.avatar,
+        },
+        contentTitle: content?.title,
+      })
     })
   }
 

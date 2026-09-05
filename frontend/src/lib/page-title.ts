@@ -9,6 +9,7 @@ const TITLES: [string, string][] = [
   ['/accounts', '账号管理'],
   ['/contents', '作品管理'],
   ['/assets', '素材库'],
+  ['/analytics', '数据分析'],
   ['/tasks', '发布任务'],
   ['/workspace/credentials', '平台凭据'],
   ['/workspace/proxies', '代理管理'],

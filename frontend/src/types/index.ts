@@ -181,6 +181,8 @@ export interface TaskResult {
   accountId: string
   platform: Platform
   success: boolean
+  /** 平台侧作品 id，用它跟 posts 表对上才能拿到指标 */
+  postId?: string
   postUrl?: string
   error?: string
 }
@@ -194,6 +196,37 @@ export interface Stats {
   views: number
   comments: number
   recordedAt: string
+}
+
+/** 一条作品在某个账号上的发布结果，指标由后台调度器定期回收 */
+export interface Post {
+  id: string
+  contentId: string
+  accountId: string
+  platform: Platform
+  platformPostId: string
+  postUrl?: string
+  publishedAt: string
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  /** 为空表示还没成功拉到过指标，此时那几个 0 不是真实值 */
+  metricsUpdatedAt?: string
+  account?: Pick<Account, 'id' | 'username' | 'displayName' | 'platform' | 'avatar'>
+  contentTitle?: string
+}
+
+export type PostSort = 'publishedAt' | 'views' | 'likes' | 'comments' | 'shares'
+
+export interface PostsSummary {
+  posts: number
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  /** 已成功拉到过指标的条数，用来说明合计覆盖了多少 */
+  measured: number
 }
 
 export const MCP_SCOPES = [

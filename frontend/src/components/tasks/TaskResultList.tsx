@@ -1,8 +1,15 @@
 import { CheckCircle2, XCircle, Clock, Loader2, ExternalLink } from 'lucide-react'
 import { PlatformBadge } from '@/components/PlatformBadge'
-import type { Platform, PublishTask } from '@/types'
+import { PostMetrics } from '@/components/posts/PostMetrics'
+import type { Platform, Post, PublishTask } from '@/types'
 
-export function TaskResultList({ task }: { task: PublishTask }) {
+interface Props {
+  task: PublishTask
+  /** 按平台侧作品 id 索引。不传就只显示发布结果，不显示指标 */
+  postsByPlatformId?: Map<string, Post>
+}
+
+export function TaskResultList({ task, postsByPlatformId }: Props) {
   const pendingIds = task.accountIds.filter((id) => !task.results.some((r) => r.accountId === id))
 
   if (task.results.length === 0) {
@@ -36,6 +43,9 @@ export function TaskResultList({ task }: { task: PublishTask }) {
           <div className="flex-1 min-w-0">
             <AccountLine task={task} accountId={r.accountId} platform={r.platform} />
             {r.error && <p className="text-xs text-red-500 mt-0.5 break-words">{r.error}</p>}
+            {r.postId && postsByPlatformId?.has(r.postId) && (
+              <PostMetrics post={postsByPlatformId.get(r.postId)!} className="mt-1" />
+            )}
           </div>
           {r.postUrl && (
             <a

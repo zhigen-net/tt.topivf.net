@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { taskStatusLabel } from '@/components/tasks/constants'
 import { api } from '@/lib/api'
+import { formatCount } from '@/lib/utils'
 import { useAllAccounts } from '@/lib/accounts'
 import type { Account, Platform, TaskStatus } from '@/types'
 
@@ -24,12 +25,6 @@ const platformColors: Record<Platform, string> = {
   facebook: '#1877f2',
 }
 
-function fmt(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
-}
-
 export default function Dashboard() {
   const { data } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
@@ -45,7 +40,7 @@ export default function Dashboard() {
     { label: '账号总数', value: data ? String(data.accounts) : '—', icon: Users },
     { label: '作品数量', value: data ? String(data.contents) : '—', icon: FileVideo },
     { label: '待执行任务', value: data ? String(data.pendingTasks + data.runningTasks) : '—', icon: CalendarClock },
-    { label: '粉丝总数', value: data ? fmt(data.totalFollowers) : '—', icon: TrendingUp },
+    { label: '粉丝总数', value: data ? formatCount(data.totalFollowers) : '—', icon: TrendingUp },
   ]
 
   return (
@@ -81,8 +76,8 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={platformStats} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <XAxis dataKey="platform" tick={{ fontSize: 12 }} tickFormatter={capitalize} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={fmt} width={48} />
-                  <Tooltip formatter={(v) => fmt(Number(v))} labelFormatter={capitalize} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCount} width={48} />
+                  <Tooltip formatter={(v) => formatCount(Number(v))} labelFormatter={capitalize} />
                   <Bar dataKey="followers" radius={[4, 4, 0, 0]}>
                     {platformStats.map((entry) => (
                       <Cell key={entry.platform} fill={platformColors[entry.platform] ?? '#6366f1'} />
@@ -110,7 +105,7 @@ export default function Dashboard() {
                       <span className="text-muted-foreground text-xs">{count} 个账号</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-medium tabular-nums">{fmt(followers)} 粉丝</div>
+                      <div className="font-medium tabular-nums">{formatCount(followers)} 粉丝</div>
                       <div className="text-xs text-muted-foreground tabular-nums">{posts} 作品</div>
                     </div>
                   </div>
@@ -150,7 +145,7 @@ export default function Dashboard() {
                       <p className="truncate text-xs text-muted-foreground">@{a.username}</p>
                     </div>
                     <PlatformBadge platform={a.platform} />
-                    <span className="shrink-0 font-medium tabular-nums">{fmt(a.followers)}</span>
+                    <span className="shrink-0 font-medium tabular-nums">{formatCount(a.followers)}</span>
                   </div>
                 ))}
               </div>

@@ -5,7 +5,7 @@ import { Drawer, DrawerBody, DrawerContent, DrawerHeader, DrawerTitle } from '@/
 import { TaskResultList } from '@/components/tasks/TaskResultList'
 import { taskStatusLabel, taskStatusVariant } from '@/components/tasks/constants'
 import { api } from '@/lib/api'
-import type { Content, PaginatedResponse, PublishTask } from '@/types'
+import type { Content, PaginatedResponse, Post, PublishTask } from '@/types'
 
 const PAGE_SIZE = 50
 
@@ -20,6 +20,16 @@ export function PublishRecordsDrawer({ content, onClose }: { content: Content | 
     refetchInterval: (q) => q.state.data?.data.some((t) => t.status === 'pending' || t.status === 'running') ? 5_000 : false,
   })
 
+  // 指标由后台调度器每几小时刷一次，跟着抽屉轮询没意义，开一次拉一次就够
+  const { data: posts } = useQuery({
+    queryKey: ['posts', 'by-content', content?.id],
+    queryFn: () => api
+      .get<PaginatedResponse<Post>>('/posts', { params: { contentId: content!.id, limit: 200 } })
+      .then((r) => r.data),
+    enabled: !!content,
+  })
+
+  const postsByPlatformId = new Map((posts?.data ?? []).map((p) => [p.platformPostId, p]))
   const tasks = data?.data ?? []
 
   return (
@@ -66,7 +76,7 @@ export function PublishRecordsDrawer({ content, onClose }: { content: Content | 
                     {task.results.filter((r) => r.success).length}/{task.accountIds.length} 个账号发布成功
                   </p>
 
-                  <TaskResultList task={task} />
+                  <TaskResultList task={task} postsByPlatformId={postsByPlatformId} />
                 </div>
               ))}
             </>
