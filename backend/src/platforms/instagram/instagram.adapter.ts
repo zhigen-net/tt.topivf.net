@@ -121,6 +121,12 @@ export class InstagramAdapter extends PlatformAdapter {
         { fields: 'like_count,comments_count' },
         token,
       )
+      // 同 Facebook：字段整个缺席是读不到，不是真的 0
+      if (res.like_count === undefined && res.comments_count === undefined) {
+        this.logger.warn(`Instagram 作品 ${platformPostId} 没返回互动字段，跳过而不是写 0`)
+        return null
+      }
+
       return {
         views: await this.fetchViews(platformPostId, token),
         likes: res.like_count ?? 0,

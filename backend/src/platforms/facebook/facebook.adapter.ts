@@ -129,6 +129,15 @@ export class FacebookAdapter extends PlatformAdapter {
         token,
       )
 
+      // 真的是 0 会带回 likes.summary.total_count=0；权限不够时字段整个不出现，
+      // 两者都当 0 写回去就等于往库里灌假数据
+      if (res.likes === undefined && res.comments === undefined && res.shares === undefined) {
+        this.logger.warn(
+          `Facebook 贴文 ${platformPostId} 没返回任何互动字段，多半是主页令牌缺 pages_read_engagement`,
+        )
+        return null
+      }
+
       return {
         views: await this.fetchImpressions(platformPostId, token),
         likes: res.likes?.summary?.total_count ?? 0,
