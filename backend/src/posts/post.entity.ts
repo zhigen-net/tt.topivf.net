@@ -50,9 +50,16 @@ export class Post {
   @Column({ default: 0 })
   shares: number
 
-  /** 没拉过数据时为空，调度器按它挑该刷哪些 */
+  /** 只在真拿到指标时更新。空 = 上面四个数是默认值不是真实数据，别当 0 展示 */
   @Column({ name: 'metrics_updated_at', nullable: true })
   metricsUpdatedAt?: Date
+
+  /**
+   * 最后一次「尝试」拉取的时间，成功与否都记。调度器按它挑该刷哪些。
+   * 不能复用 metricsUpdatedAt：失败也盖上去的话，拉不到的作品会被当成拿到了 0。
+   */
+  @Column({ name: 'metrics_checked_at', nullable: true })
+  metricsCheckedAt?: Date
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date

@@ -184,24 +184,26 @@ export class PostsService implements OnModuleInit {
     return this.repo
       .createQueryBuilder('p')
       .where('p.published_at > :publishedAfter', { publishedAfter })
-      .andWhere('(p.metrics_updated_at IS NULL OR p.metrics_updated_at < :staleBefore)', {
+      .andWhere('(p.metrics_checked_at IS NULL OR p.metrics_checked_at < :staleBefore)', {
         staleBefore,
       })
-      .orderBy('p.metrics_updated_at', 'ASC', 'NULLS FIRST')
+      .orderBy('p.metrics_checked_at', 'ASC', 'NULLS FIRST')
       .limit(take)
       .getMany()
   }
 
   async saveMetrics(id: string, metrics: PostMetrics) {
-    await this.repo.update(id, { ...metrics, metricsUpdatedAt: new Date() })
+    const now = new Date()
+    await this.repo.update(id, { ...metrics, metricsUpdatedAt: now, metricsCheckedAt: now })
   }
 
   /**
    * 拉不到也要记一笔时间。否则这条会永远排在「没拉过」的最前面，每轮都占着
-   * 名额重试同一批拿不到的作品，把后面的饿死。
+   * 名额重试同一批拿不到的作品，把后面的饿死。只动 checkedAt，updatedAt 留空，
+   * 这样界面上仍然是「指标待回收」而不是四个 0。
    */
   async markAttempted(id: string) {
-    await this.repo.update(id, { metricsUpdatedAt: new Date() })
+    await this.repo.update(id, { metricsCheckedAt: new Date() })
   }
 
   /**
