@@ -11,36 +11,19 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { contentTypeLabel } from '@/components/contents/constants'
+import { taskStatusLabel } from '@/components/tasks/constants'
+import {
+  accountStatusLabel as statusLabel, accountStatusVariant as statusVariant,
+} from './constants'
 import { AccountEditForm } from './AccountEditForm'
 import { api } from '@/lib/api'
-import type { Account, AccountStatus, PaginatedResponse, Proxy, PublishTask, TaskStatus } from '@/types'
+import type { Account, PaginatedResponse, Proxy, PublishTask, TaskStatus } from '@/types'
 
 // 记录本次页面会话内已自动同步过的账号，避免重复请求
 const autoSyncedIds = new Set<string>()
 
 interface SyncResult extends Account {
   healthy: boolean
-}
-
-const statusVariant: Record<AccountStatus, 'success' | 'destructive' | 'secondary' | 'warning'> = {
-  active: 'success',
-  inactive: 'secondary',
-  banned: 'destructive',
-  warming: 'warning',
-}
-
-const statusLabel: Record<AccountStatus, string> = {
-  active: '正常',
-  inactive: '停用',
-  banned: '封禁',
-  warming: '养号',
-}
-
-const taskStatusLabel: Record<TaskStatus, string> = {
-  pending: '待发布',
-  running: '发布中',
-  done: '已完成',
-  failed: '失败',
 }
 
 const taskStatusClass: Record<TaskStatus, string> = {

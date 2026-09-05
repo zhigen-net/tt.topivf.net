@@ -1,10 +1,10 @@
 import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
 import { Type } from 'class-transformer'
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { CONTENT_TYPES, PLATFORMS } from './create-content.dto'
+import { CONTENT_TYPES } from './create-content.dto'
 import { REVIEW_STATUSES } from './review-content.dto'
 import type { ContentType, ReviewStatus } from '../content.entity'
-import type { Platform } from '../../accounts/account.entity'
+import { PLATFORMS, type Platform } from '../../accounts/account.entity'
 
 export const SORT_FIELDS = ['createdAt', 'updatedAt', 'title', 'type'] as const
 export type SortField = (typeof SORT_FIELDS)[number]

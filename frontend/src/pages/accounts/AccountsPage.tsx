@@ -7,22 +7,11 @@ import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
 import { AccountDetailDrawer } from '@/components/accounts/AccountDetailDrawer'
+import {
+  accountStatusLabel as statusLabel, accountStatusVariant as statusVariant,
+} from '@/components/accounts/constants'
 import { api } from '@/lib/api'
-import type { Account, AccountStatus } from '@/types'
-
-const statusVariant: Record<AccountStatus, 'success' | 'destructive' | 'secondary' | 'warning'> = {
-  active: 'success',
-  inactive: 'secondary',
-  banned: 'destructive',
-  warming: 'warning',
-}
-
-const statusLabel: Record<AccountStatus, string> = {
-  active: '正常',
-  inactive: '停用',
-  banned: '封禁',
-  warming: '养号',
-}
+import type { Account } from '@/types'
 
 export default function AccountsPage() {
   const qc = useQueryClient()

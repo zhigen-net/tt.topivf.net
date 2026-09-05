@@ -6,8 +6,12 @@ import { Exclude } from 'class-transformer'
 import { Proxy } from '../proxies/proxy.entity'
 import { MetaCredential } from '../credentials/meta-credential.entity'
 
-export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'twitter' | 'facebook'
-export type AccountStatus = 'active' | 'inactive' | 'banned' | 'warming'
+/** 平台清单的唯一出处：实体的 enum 列、DTO 校验、MCP 的 zod schema 都引这里 */
+export const PLATFORMS = ['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] as const
+export type Platform = (typeof PLATFORMS)[number]
+
+export const ACCOUNT_STATUSES = ['active', 'inactive', 'banned', 'warming'] as const
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number]
 
 @Entity('accounts')
 @Index(['workspaceId'])
@@ -18,7 +22,7 @@ export class Account {
   @Column({ name: 'workspace_id', type: 'uuid', nullable: true })
   workspaceId?: string
 
-  @Column({ type: 'enum', enum: ['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] })
+  @Column({ type: 'enum', enum: [...PLATFORMS] })
   platform: Platform
 
   @Column({ unique: false })
@@ -30,7 +34,7 @@ export class Account {
   @Column({ nullable: true })
   avatar?: string
 
-  @Column({ type: 'enum', enum: ['active', 'inactive', 'banned', 'warming'], default: 'inactive' })
+  @Column({ type: 'enum', enum: [...ACCOUNT_STATUSES], default: 'inactive' })
   status: AccountStatus
 
   @Column({ name: 'group_id', nullable: true })

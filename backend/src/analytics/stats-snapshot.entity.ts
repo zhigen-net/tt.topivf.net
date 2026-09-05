@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm'
-import type { Platform } from '../accounts/account.entity'
+import { PLATFORMS, type Platform } from '../accounts/account.entity'
 
 @Entity('stats_snapshots')
 export class StatsSnapshot {
@@ -9,7 +9,7 @@ export class StatsSnapshot {
   @Column({ name: 'account_id' })
   accountId: string
 
-  @Column({ type: 'enum', enum: ['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] })
+  @Column({ type: 'enum', enum: [...PLATFORMS] })
   platform: Platform
 
   @Column({ default: 0 })

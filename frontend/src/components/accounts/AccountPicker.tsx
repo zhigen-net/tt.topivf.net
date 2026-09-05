@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, CheckCircle2, Clock } from 'lucide-react'
 import { allPlatforms, platformLabel } from '@/components/contents/constants'
+import { accountStatusLabel as statusLabel } from '@/components/accounts/constants'
 import { api } from '@/lib/api'
-import type { Account, AccountStatus, PaginatedResponse, Platform, PublishTask } from '@/types'
+import type { Account, PaginatedResponse, Platform, PublishTask } from '@/types'
 
 /** 账号在当前作品上的发布痕迹 */
 export interface AccountPublishState {
@@ -56,13 +57,6 @@ interface Props {
 
 // 账号多到一定程度时全量渲染会卡，超出的部分让用户用搜索找
 const RENDER_CAP = 150
-
-const statusLabel: Record<AccountStatus, string> = {
-  active: '正常',
-  inactive: '停用',
-  banned: '封禁',
-  warming: '养号',
-}
 
 export function AccountPicker({ accounts, selected, onChange, history, emptyHint }: Props) {
   const [search, setSearch] = useState('')

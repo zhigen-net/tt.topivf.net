@@ -1,7 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, Unique,
 } from 'typeorm'
-import type { Platform } from '../accounts/account.entity'
+import { PLATFORMS, type Platform } from '../accounts/account.entity'
 
 /**
  * 一条作品在某个账号上的发布结果。发布任务的 results 是 jsonb 数组，没法索引也没法
@@ -25,7 +25,7 @@ export class Post {
   @Column({ name: 'account_id', type: 'uuid' })
   accountId: string
 
-  @Column({ type: 'enum', enum: ['tiktok', 'instagram', 'youtube', 'twitter', 'facebook'] })
+  @Column({ type: 'enum', enum: [...PLATFORMS] })
   platform: Platform
 
   /** 平台侧的作品 id，拉数据全靠它 */

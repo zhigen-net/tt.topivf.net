@@ -2,8 +2,7 @@ import {
   ArrayMaxSize, ArrayNotEmpty, IsArray, IsDateString, IsEnum, IsOptional, IsUUID,
 } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { PLATFORMS } from '../../contents/dto/create-content.dto'
-import type { Platform } from '../../accounts/account.entity'
+import { PLATFORMS, type Platform } from '../../accounts/account.entity'
 
 export class CreateTaskDto {
   @ApiProperty()

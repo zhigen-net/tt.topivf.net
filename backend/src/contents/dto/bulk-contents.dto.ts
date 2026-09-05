@@ -1,7 +1,6 @@
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsEnum, IsUUID } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
-import { PLATFORMS } from './create-content.dto'
-import type { Platform } from '../../accounts/account.entity'
+import { PLATFORMS, type Platform } from '../../accounts/account.entity'
 
 export class BulkIdsDto {
   @ApiProperty({ type: [String] })

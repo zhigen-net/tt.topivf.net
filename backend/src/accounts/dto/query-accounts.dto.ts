@@ -1,9 +1,9 @@
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
 import { Type } from 'class-transformer'
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { PLATFORMS } from '../../contents/dto/create-content.dto'
-import { ACCOUNT_STATUSES } from './update-account.dto'
-import type { AccountStatus, Platform } from '../account.entity'
+import {
+  ACCOUNT_STATUSES, PLATFORMS, type AccountStatus, type Platform,
+} from '../account.entity'
 
 export class QueryAccountsDto {
   @ApiPropertyOptional({ enum: PLATFORMS })
