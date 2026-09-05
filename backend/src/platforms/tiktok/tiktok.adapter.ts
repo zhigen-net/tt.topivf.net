@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
 import { TiktokApiAdapter } from './tiktok-api.adapter'
 import { TiktokBrowserAdapter } from './tiktok-browser.adapter'
 import { readSession } from './tiktok-token.service'
@@ -31,6 +31,10 @@ export class TiktokAdapter extends PlatformAdapter {
 
   checkHealth(account: Account): Promise<boolean> {
     return this.pick(account).checkHealth(account)
+  }
+
+  fetchPostMetrics(account: Account, platformPostId: string): Promise<PostMetrics | null> {
+    return this.pick(account).fetchPostMetrics(account, platformPostId)
   }
 
   private pick(account: Account): PlatformAdapter {

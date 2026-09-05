@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
 import { graphGet, graphPost, graphUpload, GraphError } from './graph-api'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
@@ -106,6 +106,52 @@ export class FacebookAdapter extends PlatformAdapter {
       }
       this.logger.warn(`checkHealth failed for ${account.username}: ${err}`)
       return false
+    }
+  }
+
+  /**
+   * 互动数走贴文本体的 summary，曝光数只能走 insights。后者对 Reel、快拍这些
+   * 非普通贴文经常直接报错，所以拆成两次请求：拿不到曝光不影响其余三个数。
+   */
+  async fetchPostMetrics(account: Account, platformPostId: string): Promise<PostMetrics | null> {
+    const session = readSession(account)
+    if (!session) return null
+    const token = session.pageAccessToken
+
+    try {
+      const res = await graphGet<{
+        likes?: { summary?: { total_count?: number } }
+        comments?: { summary?: { total_count?: number } }
+        shares?: { count?: number }
+      }>(
+        `/${platformPostId}`,
+        { fields: 'likes.summary(true),comments.summary(true),shares' },
+        token,
+      )
+
+      return {
+        views: await this.fetchImpressions(platformPostId, token),
+        likes: res.likes?.summary?.total_count ?? 0,
+        comments: res.comments?.summary?.total_count ?? 0,
+        shares: res.shares?.count ?? 0,
+      }
+    } catch (err) {
+      // (#10) 在贴文被删掉时也会报，这里不区分：拿不到就是拿不到
+      this.logger.warn(`拉取 Facebook 贴文指标失败 ${platformPostId}: ${err}`)
+      return null
+    }
+  }
+
+  private async fetchImpressions(postId: string, token: string): Promise<number> {
+    try {
+      const res = await graphGet<{ data?: Array<{ values?: Array<{ value?: number }> }> }>(
+        `/${postId}/insights`,
+        { metric: 'post_impressions' },
+        token,
+      )
+      return res.data?.[0]?.values?.[0]?.value ?? 0
+    } catch {
+      return 0
     }
   }
 

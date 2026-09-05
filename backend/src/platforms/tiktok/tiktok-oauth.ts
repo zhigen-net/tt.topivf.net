@@ -13,7 +13,12 @@ export const TIKTOK_SCOPES = [
   'user.info.stats',
   'video.publish',
   'video.upload',
+  // 回收已发布作品的播放/点赞数要它。本次改动之前授权的账号拿不到这个 scope，
+  // 适配器按 freshAccessToken 返回的实际 scopes 判断，缺了就跳过而不是写成 0
+  'video.list',
 ]
+
+export const VIDEO_LIST_SCOPE = 'video.list'
 
 export interface TiktokTokens {
   openId: string

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
 import { graphGet, graphPost, GraphError } from '../facebook/graph-api'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
@@ -102,6 +102,47 @@ export class InstagramAdapter extends PlatformAdapter {
       }
       this.logger.warn(`checkHealth failed for @${account.username}: ${err}`)
       return false
+    }
+  }
+
+  /**
+   * 点赞和评论是 media 上的普通字段，播放量只能走 insights，而 insights 对
+   * 不同媒体类型支持的 metric 不一样，所以拆开取，拿不到播放量就记 0。
+   * Instagram 没有「转发」这个概念，shares 恒为 0。
+   */
+  async fetchPostMetrics(account: Account, platformPostId: string): Promise<PostMetrics | null> {
+    const session = readSession(account)
+    if (!session) return null
+    const token = session.pageAccessToken
+
+    try {
+      const res = await graphGet<{ like_count?: number; comments_count?: number }>(
+        `/${platformPostId}`,
+        { fields: 'like_count,comments_count' },
+        token,
+      )
+      return {
+        views: await this.fetchViews(platformPostId, token),
+        likes: res.like_count ?? 0,
+        comments: res.comments_count ?? 0,
+        shares: 0,
+      }
+    } catch (err) {
+      this.logger.warn(`拉取 Instagram 作品指标失败 ${platformPostId}: ${err}`)
+      return null
+    }
+  }
+
+  private async fetchViews(mediaId: string, token: string): Promise<number> {
+    try {
+      const res = await graphGet<{ data?: Array<{ values?: Array<{ value?: number }> }> }>(
+        `/${mediaId}/insights`,
+        { metric: 'views' },
+        token,
+      )
+      return res.data?.[0]?.values?.[0]?.value ?? 0
+    } catch {
+      return 0
     }
   }
 

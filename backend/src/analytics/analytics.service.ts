@@ -20,4 +20,24 @@ export class AnalyticsService {
   }
 
   record(data: Partial<StatsSnapshot>) { return this.repo.save(this.repo.create(data)) }
+
+  /**
+   * 每天给账号留一张快照。判重看的是库里最新一条的时间而不是调度器的计时器——
+   * sh_api 重启很频繁，计时器每次都从头开始，只靠间隔会在一天内堆出十几张。
+   */
+  async snapshotIfDue(account: Account, minGapMs: number): Promise<boolean> {
+    const latest = await this.repo.findOne({
+      where: { accountId: account.id },
+      order: { recordedAt: 'DESC' },
+    })
+    if (latest && Date.now() - latest.recordedAt.getTime() < minGapMs) return false
+
+    await this.record({
+      accountId: account.id,
+      platform: account.platform,
+      followers: account.followers,
+      following: account.following,
+    })
+    return true
+  }
 }

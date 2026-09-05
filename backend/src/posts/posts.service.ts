@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { DataSource, Repository } from 'typeorm'
 import { Post } from './post.entity'
+import type { PostMetrics } from '../platforms/platform.adapter'
 import type { Platform } from '../accounts/account.entity'
 
 export interface RecordPostInput {
@@ -53,6 +54,34 @@ export class PostsService implements OnModuleInit {
       order: { publishedAt: 'DESC' },
       take,
     })
+  }
+
+  /**
+   * 挑该刷指标的作品：没拉过的排在最前，其余按最久没刷的先来。
+   * 太老的作品数据基本不动了，一直刷它们只是白白消耗平台配额。
+   */
+  findStale(staleBefore: Date, publishedAfter: Date, take: number) {
+    return this.repo
+      .createQueryBuilder('p')
+      .where('p.published_at > :publishedAfter', { publishedAfter })
+      .andWhere('(p.metrics_updated_at IS NULL OR p.metrics_updated_at < :staleBefore)', {
+        staleBefore,
+      })
+      .orderBy('p.metrics_updated_at', 'ASC', 'NULLS FIRST')
+      .limit(take)
+      .getMany()
+  }
+
+  async saveMetrics(id: string, metrics: PostMetrics) {
+    await this.repo.update(id, { ...metrics, metricsUpdatedAt: new Date() })
+  }
+
+  /**
+   * 拉不到也要记一笔时间。否则这条会永远排在「没拉过」的最前面，每轮都占着
+   * 名额重试同一批拿不到的作品，把后面的饿死。
+   */
+  async markAttempted(id: string) {
+    await this.repo.update(id, { metricsUpdatedAt: new Date() })
   }
 
   /**

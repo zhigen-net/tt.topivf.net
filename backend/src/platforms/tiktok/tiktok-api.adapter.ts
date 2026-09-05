@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
 import { tiktokGet, tiktokPost, TiktokApiError } from './tiktok-api'
+import { VIDEO_LIST_SCOPE } from './tiktok-oauth'
 import { TiktokTokenService, readSession } from './tiktok-token.service'
 import { uploadChunks, planChunks } from './tiktok-upload'
 import type { Account } from '../../accounts/account.entity'
@@ -111,6 +112,42 @@ export class TiktokApiAdapter extends PlatformAdapter {
     } catch (err) {
       this.logger.warn(`TikTok 健康检查失败 @${account.username}: ${err}`)
       return false
+    }
+  }
+
+  /**
+   * video.list 是本次才加进 TIKTOK_SCOPES 的，早先授权的账号令牌上没有。
+   * 硬发过去只会拿到 scope_not_authorized，所以先看实际 scopes 再决定。
+   */
+  async fetchPostMetrics(account: Account, platformPostId: string): Promise<PostMetrics | null> {
+    if (!readSession(account)) return null
+
+    try {
+      const { token, scopes } = await this.tokens.freshAccessToken(account)
+      if (!scopes.includes(VIDEO_LIST_SCOPE)) {
+        this.logger.warn(`@${account.username} 的授权不含 ${VIDEO_LIST_SCOPE}，跳过指标回收`)
+        return null
+      }
+
+      const res = await tiktokPost<{ videos?: Array<Record<string, number>> }>(
+        '/video/query/?fields=id,view_count,like_count,comment_count,share_count',
+        { filters: { video_ids: [platformPostId] } },
+        token,
+      )
+
+      // 作品被删掉时 videos 是空数组而不是报错
+      const video = res.videos?.[0]
+      if (!video) return null
+
+      return {
+        views: video.view_count ?? 0,
+        likes: video.like_count ?? 0,
+        comments: video.comment_count ?? 0,
+        shares: video.share_count ?? 0,
+      }
+    } catch (err) {
+      this.logger.warn(`拉取 TikTok 作品指标失败 ${platformPostId}: ${err}`)
+      return null
     }
   }
 
