@@ -19,7 +19,7 @@ export function PostMetrics({ post, className }: { post: Post; className?: strin
   if (!post.metricsUpdatedAt) {
     return (
       <p className={cn('text-xs text-muted-foreground', className)}>
-        指标还没回收，稍后再看
+        {post.metricsAbandoned ? '已停止回收指标（作品多半已在平台侧删除）' : '指标还没回收，稍后再看'}
       </p>
     )
   }

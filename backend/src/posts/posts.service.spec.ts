@@ -2,20 +2,29 @@ import { PostsService, MAX_METRIC_FAILS } from './posts.service'
 import type { Repository } from 'typeorm'
 import type { Post } from './post.entity'
 
-function build() {
+function build(rows: Partial<Post>[] = []) {
   const update = jest.fn().mockResolvedValue(undefined)
   const qb = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue([]),
+    getMany: jest.fn().mockResolvedValue(rows),
+    getManyAndCount: jest.fn().mockResolvedValue([rows, rows.length]),
   }
   const repo = {
     update,
     createQueryBuilder: jest.fn(() => qb),
   } as unknown as Repository<Post>
-  return { service: new PostsService(repo, {} as never, {} as never, {} as never), update, qb }
+  const emptyRepo = { find: jest.fn().mockResolvedValue([]) } as never
+  return {
+    service: new PostsService(repo, emptyRepo, emptyRepo, {} as never),
+    update,
+    qb,
+  }
 }
 
 /**
@@ -60,6 +69,17 @@ describe('连续失败计数', () => {
     await service.saveMetrics('p1', { views: 1, likes: 0, comments: 0, shares: 0 })
 
     expect(update.mock.calls[0][1].metricsFailCount).toBe(0)
+  })
+
+  // 阈值只留在后端，前端认这个布尔值；边界写错会让 UI 提前或永不显示「已停止回收」
+  it('把是否放弃算成布尔值给前端，边界是「达到即放弃」', async () => {
+    const { service } = build([
+      { id: 'a', accountId: 'x', contentId: 'y', metricsFailCount: MAX_METRIC_FAILS - 1 },
+      { id: 'b', accountId: 'x', contentId: 'y', metricsFailCount: MAX_METRIC_FAILS },
+    ])
+    const { data } = await service.findAll('ws1', {})
+
+    expect(data.map((p) => p.metricsAbandoned)).toEqual([false, true])
   })
 
   it('超限的作品不再进入待刷队列', async () => {

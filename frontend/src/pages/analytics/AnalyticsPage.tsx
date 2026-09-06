@@ -234,7 +234,7 @@ function MetricCells({ post }: { post: Post }) {
   if (!post.metricsUpdatedAt) {
     return (
       <td colSpan={4} className="px-3 py-2 text-center text-xs text-muted-foreground">
-        指标待回收
+        {post.metricsAbandoned ? '已停止回收' : '指标待回收'}
       </td>
     )
   }

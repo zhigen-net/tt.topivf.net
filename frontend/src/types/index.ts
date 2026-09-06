@@ -213,6 +213,8 @@ export interface Post {
   shares: number
   /** 为空表示还没成功拉到过指标，此时那几个 0 不是真实值 */
   metricsUpdatedAt?: string
+  /** 连续失败太多次已放弃，不会再有指标了。阈值在后端，前端只认这个布尔值 */
+  metricsAbandoned?: boolean
   account?: Pick<Account, 'id' | 'username' | 'displayName' | 'platform' | 'avatar'>
   contentTitle?: string
 }

@@ -27,6 +27,8 @@ export interface PostAccountBrief {
 export type PostWithRefs = Post & {
   account?: PostAccountBrief
   contentTitle?: string
+  /** 已放弃回收。给前端一个布尔值，免得把失败次数的阈值也抄一份到前端 */
+  metricsAbandoned: boolean
 }
 
 export interface PostsSummary {
@@ -179,6 +181,7 @@ export class PostsService implements OnModuleInit {
           avatar: account.avatar,
         },
         contentTitle: content?.title,
+        metricsAbandoned: p.metricsFailCount >= MAX_METRIC_FAILS,
       })
     })
   }
