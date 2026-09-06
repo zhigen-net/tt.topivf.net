@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator'
+import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator'
 import { Type } from 'class-transformer'
 import { ApiPropertyOptional } from '@nestjs/swagger'
 
@@ -7,6 +7,12 @@ export class QueryTasksDto {
   @IsOptional()
   @IsUUID('4')
   accountId?: string
+
+  @ApiPropertyOptional({ description: '按作品标题搜索' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string
 
   @ApiPropertyOptional()
   @IsOptional()

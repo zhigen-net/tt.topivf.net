@@ -30,10 +30,18 @@ export class AccountsService {
     opts: { platform?: Platform; status?: AccountStatus; search?: string; page?: number; limit?: number },
   ) {
     const { platform, status, search, page = 1, limit = 20 } = opts
-    const where: FindOptionsWhere<Account> = { workspaceId }
-    if (platform) where.platform = platform
-    if (status) where.status = status
-    if (search) where.username = ILike(`%${search}%`)
+    const base: FindOptionsWhere<Account> = { workspaceId }
+    if (platform) base.platform = platform
+    if (status) base.status = status
+
+    // 列表上昵称比用户名显眼，只搜 username 会让人以为账号不存在。
+    // 数组即 OR，其余条件必须在每个分支里重复一遍，否则 OR 会绕过空间隔离。
+    const where = search
+      ? [
+          { ...base, username: ILike(`%${search}%`) },
+          { ...base, displayName: ILike(`%${search}%`) },
+        ]
+      : base
 
     const [data, total] = await this.repo.findAndCount({
       where,

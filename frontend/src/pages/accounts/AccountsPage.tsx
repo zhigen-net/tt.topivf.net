@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Plus, Search, RefreshCw, Trash2, Pencil } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Search, RefreshCw, Trash2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
@@ -11,19 +11,37 @@ import {
   accountStatusLabel as statusLabel, accountStatusVariant as statusVariant,
 } from '@/components/accounts/constants'
 import { api } from '@/lib/api'
-import type { Account } from '@/types'
+import type { Account, PaginatedResponse } from '@/types'
+
+const PAGE_SIZE = 20
 
 export default function AccountsPage() {
   const qc = useQueryClient()
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [drawerMode, setDrawerMode] = useState<'view' | 'edit'>('view')
   const [removing, setRemoving] = useState<Account | null>(null)
 
+  // 每敲一个字就打一次接口没必要，停下来再查
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  useEffect(() => setPage(1), [search])
+
+  const params = useMemo(
+    () => ({ ...(search ? { search } : {}), page, limit: PAGE_SIZE }),
+    [search, page],
+  )
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => api.get<{ data: Account[]; total: number }>('/accounts').then((r) => r.data),
+    queryKey: ['accounts', params],
+    queryFn: () => api.get<PaginatedResponse<Account>>('/accounts', { params }).then((r) => r.data),
+    placeholderData: keepPreviousData,
   })
 
   // 抽屉里存 id 而不是对象，编辑保存后才能拿到刷新过的数据
@@ -49,9 +67,8 @@ export default function AccountsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })
 
-  const accounts = (data?.data ?? []).filter(
-    (a) => a.username.includes(search) || a.displayName.toLowerCase().includes(search.toLowerCase()),
-  )
+  const accounts = data?.data ?? []
+  const totalPages = data?.totalPages ?? 1
 
   function statusToggle(account: Account) {
     const disabled = account.status === 'inactive'
@@ -133,9 +150,9 @@ export default function AccountsPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           className="w-full rounded-md border bg-background px-9 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          placeholder="搜索账号…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="搜索账号名或昵称…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
       </div>
 
@@ -226,6 +243,18 @@ export default function AccountsPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground tabular-nums">第 {page} / {totalPages} 页</span>
+          <Button variant="outline" size="icon" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       <AddAccountDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <AccountDetailDrawer

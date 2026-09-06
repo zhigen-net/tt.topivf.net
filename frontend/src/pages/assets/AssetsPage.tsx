@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Trash2, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -14,25 +14,39 @@ import type { Asset, AssetType, PaginatedResponse } from '@/types'
 
 type Filter = 'all' | AssetType | 'unreferenced'
 
+const PAGE_SIZE = 48
+
 export default function AssetsPage() {
   const qc = useQueryClient()
   const { can } = useWorkspace()
   const canEdit = can('member')
   const fileInput = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [removing, setRemoving] = useState<Asset | null>(null)
 
-  const params = {
+  // 每敲一个字就打一次接口没必要，停下来再查
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  useEffect(() => setPage(1), [search, filter])
+
+  const params = useMemo(() => ({
     search: search || undefined,
     type: filter === 'video' || filter === 'image' ? filter : undefined,
     unreferenced: filter === 'unreferenced' ? 'true' : undefined,
-    limit: 48,
-  }
+    page,
+    limit: PAGE_SIZE,
+  }), [search, filter, page])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['assets', filter, search],
+    queryKey: ['assets', params],
     queryFn: () => api.get<PaginatedResponse<Asset>>('/assets', { params }).then((r) => r.data),
+    placeholderData: keepPreviousData,
   })
 
   const upload = useMutation({
@@ -54,6 +68,7 @@ export default function AssetsPage() {
   })
 
   const assets = data?.data ?? []
+  const totalPages = data?.totalPages ?? 1
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -83,8 +98,8 @@ export default function AssetsPage() {
 
       <div className="flex flex-wrap gap-2">
         <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder="搜索文件名"
           className="max-w-56"
         />
@@ -110,7 +125,9 @@ export default function AssetsPage() {
           ))}
         </div>
       ) : assets.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">还没有素材</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">
+          {search || filter !== 'all' ? '没有匹配的素材' : '还没有素材'}
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {assets.map((a) => (
@@ -136,6 +153,18 @@ export default function AssetsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground tabular-nums">第 {page} / {totalPages} 页</span>
+          <Button variant="outline" size="icon" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       )}
 

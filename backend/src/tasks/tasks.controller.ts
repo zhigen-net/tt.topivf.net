@@ -14,7 +14,9 @@ export class TasksController {
 
   @Get()
   findAll(@Query() query: QueryTasksDto, @CurrentWorkspace() ws: WorkspaceContext) {
-    return this.svc.findAll(ws.id, query.page, query.limit, query.accountId, query.contentId)
+    return this.svc.findAll(
+      ws.id, query.page, query.limit, query.accountId, query.contentId, query.search,
+    )
   }
 
   @Get(':id')

@@ -29,7 +29,14 @@ export class TasksService {
     @InjectQueue('publish') private publishQueue: Queue,
   ) {}
 
-  async findAll(workspaceId: string, page = 1, limit = 20, accountId?: string, contentId?: string) {
+  async findAll(
+    workspaceId: string,
+    page = 1,
+    limit = 20,
+    accountId?: string,
+    contentId?: string,
+    search?: string,
+  ) {
     const qb = this.repo.createQueryBuilder('t')
       .leftJoinAndSelect('t.content', 'content')
       .where('t.workspaceId = :workspaceId', { workspaceId })
@@ -40,6 +47,8 @@ export class TasksService {
     // account_ids 是 text[]，包含判断得用数组包含运算符
     if (accountId) qb.andWhere('t.accountIds @> ARRAY[:accountId]::text[]', { accountId })
     if (contentId) qb.andWhere('t.contentId = :contentId', { contentId })
+    // 任务本身没有名字，列表上认的是作品标题，所以搜的是关联作品
+    if (search) qb.andWhere('content.title ILIKE :search', { search: `%${search}%` })
 
     const [data, total] = await qb.getManyAndCount()
     return {
