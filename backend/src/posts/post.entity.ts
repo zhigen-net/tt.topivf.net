@@ -61,6 +61,10 @@ export class Post {
   @Column({ name: 'metrics_checked_at', nullable: true })
   metricsCheckedAt?: Date
 
+  /** 连续拉取失败次数，成功即归零。作品在平台侧被删掉后不会自己好，靠它止损 */
+  @Column({ name: 'metrics_fail_count', default: 0 })
+  metricsFailCount: number
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date
 

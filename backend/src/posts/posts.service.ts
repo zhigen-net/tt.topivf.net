@@ -8,6 +8,13 @@ import type { QueryPostsDto } from './dto/query-posts.dto'
 import type { PostMetrics } from '../platforms/platform.adapter'
 import type { Platform } from '../accounts/account.entity'
 
+/**
+ * 连续失败多少次就放弃这条作品。作品在平台侧被删掉后永远拉不回来，
+ * 不设上限就会每 6 小时白白重试一次直到出了 90 天回收窗口。
+ * 按 6 小时一轮算，5 次≈一天多，够扛过临时故障又不至于耗太久。
+ */
+export const MAX_METRIC_FAILS = 5
+
 /** 展示用的账号信息，只挑不敏感的几个字段 */
 export interface PostAccountBrief {
   id: string
@@ -187,6 +194,7 @@ export class PostsService implements OnModuleInit {
       .andWhere('(p.metrics_checked_at IS NULL OR p.metrics_checked_at < :staleBefore)', {
         staleBefore,
       })
+      .andWhere('p.metrics_fail_count < :maxFails', { maxFails: MAX_METRIC_FAILS })
       .orderBy('p.metrics_checked_at', 'ASC', 'NULLS FIRST')
       .limit(take)
       .getMany()
@@ -194,16 +202,27 @@ export class PostsService implements OnModuleInit {
 
   async saveMetrics(id: string, metrics: PostMetrics) {
     const now = new Date()
-    await this.repo.update(id, { ...metrics, metricsUpdatedAt: now, metricsCheckedAt: now })
+    await this.repo.update(id, {
+      ...metrics,
+      metricsUpdatedAt: now,
+      metricsCheckedAt: now,
+      metricsFailCount: 0,
+    })
   }
 
   /**
    * 拉不到也要记一笔时间。否则这条会永远排在「没拉过」的最前面，每轮都占着
    * 名额重试同一批拿不到的作品，把后面的饿死。只动 checkedAt，updatedAt 留空，
    * 这样界面上仍然是「指标待回收」而不是四个 0。
+   *
+   * 计数在库里自增而不是读出来加一：调度器虽然是单线程，但手动触发和定时轮次
+   * 可能撞上，读改写会丢计数。
    */
   async markAttempted(id: string) {
-    await this.repo.update(id, { metricsCheckedAt: new Date() })
+    await this.repo.update(id, {
+      metricsCheckedAt: new Date(),
+      metricsFailCount: () => 'metrics_fail_count + 1',
+    })
   }
 
   /**
