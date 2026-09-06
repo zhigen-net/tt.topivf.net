@@ -43,15 +43,20 @@ export class AccountsService {
         ]
       : base
 
-    const [data, total] = await this.repo.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-      relations: { proxy: true, credential: true },
-      // 只取展示要用的三个字段，加密令牌连查都不查出来，不指望序列化去兜底
-      select: { credential: { id: true, label: true, status: true } },
-    })
+    // count 必须单独查。下面的 select 只投影了 credential 的字段，findAndCount 会把
+    // COUNT(DISTINCT …) 建到凭证列上，数出来的是「有几种凭证」，跟账号数没关系。
+    const [data, total] = await Promise.all([
+      this.repo.find({
+        where,
+        order: { createdAt: 'DESC' },
+        skip: (page - 1) * limit,
+        take: limit,
+        relations: { proxy: true, credential: true },
+        // 只取展示要用的三个字段，加密令牌连查都不查出来，不指望序列化去兜底
+        select: { credential: { id: true, label: true, status: true } },
+      }),
+      this.repo.count({ where }),
+    ])
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
   }
