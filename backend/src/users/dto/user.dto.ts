@@ -1,8 +1,12 @@
 import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional, PartialType, OmitType } from '@nestjs/swagger'
+import { MaxBytes } from './max-bytes.validator'
 import type { UserRole } from '../user.entity'
 
 export const USER_ROLES = ['admin', 'user'] as const
+
+const PASSWORD_MAX_BYTES = 72
+const PASSWORD_TOO_LONG = '密码过长：bcrypt 只认前 72 字节，一个汉字占 3 字节'
 
 export class CreateUserDto {
   @ApiProperty()
@@ -15,7 +19,7 @@ export class CreateUserDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
-  @MaxLength(72) // bcrypt 只取前 72 字节，再长的部分静默失效
+  @MaxBytes(PASSWORD_MAX_BYTES, { message: PASSWORD_TOO_LONG })
   password: string
 
   @ApiProperty()
@@ -59,11 +63,16 @@ export class ResetPasswordDto {
   @ApiProperty()
   @IsString()
   @MinLength(8)
-  @MaxLength(72)
+  @MaxBytes(PASSWORD_MAX_BYTES, { message: PASSWORD_TOO_LONG })
   password: string
 }
 
 export class ChangePasswordDto extends ResetPasswordDto {
+  /**
+   * 这里**不能**跟着收紧成按字节校验。老用户的密码可能超过 72 字节，
+   * 当初是被 bcrypt 截断后存下的、至今能正常登录；改成字节校验会让他们
+   * 连旧密码都填不进来，等于把人锁在门外还改不了密码。同理见 login.dto.ts。
+   */
   @ApiProperty()
   @IsString()
   @MaxLength(72)
