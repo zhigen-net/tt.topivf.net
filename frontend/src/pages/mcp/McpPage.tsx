@@ -64,7 +64,7 @@ export default function McpPage() {
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold">MCP 服务</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            让 Claude 等 AI 客户端接入「{workspace?.name ?? '当前空间'}」，直接查账号、建作品、审核和发布
+            让各类 AI 客户端接入「{workspace?.name ?? '当前空间'}」，直接查账号、建作品、审核和发布
           </p>
         </div>
         {can('member') && (
@@ -338,10 +338,19 @@ function IssuedTokenDialog({ issued, onClose }: {
       [serverName]: { type: 'http', url: ENDPOINT, headers: { Authorization: `Bearer ${token}` } },
     },
   }, null, 2)
+  const curl = [
+    `curl -X POST ${ENDPOINT} \\`,
+    `  -H "Authorization: Bearer ${token}" \\`,
+    '  -H "Content-Type: application/json" \\',
+    '  -H "Accept: application/json, text/event-stream" \\',
+    `  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
+  ].join('\n')
   const prompt = buildPrompt({
     serverName,
     cli,
     config,
+    curl,
+    token,
     label: key?.name ?? '',
     workspaceName: workspace?.name ?? '',
     scopeText,
@@ -381,8 +390,13 @@ function IssuedTokenDialog({ issued, onClose }: {
             value={config}
           />
           <CopyRow
+            title="调用示例"
+            hint="不支持 MCP 的客户端照这个发 HTTP 请求即可"
+            value={curl}
+          />
+          <CopyRow
             title="提示词（一键接入）"
-            hint="直接发给 Agent，它会自行挂载并按规则使用。含密钥，别外传"
+            hint="直接发给 Agent，支不支持 MCP 都能用。含密钥，别外传"
             value={prompt}
           />
         </div>
@@ -429,6 +443,8 @@ interface PromptInput {
   serverName: string
   cli: string
   config: string
+  curl: string
+  token: string
   label: string
   workspaceName: string
   scopeText: string
@@ -439,15 +455,21 @@ interface PromptInput {
  * 提示词按这把密钥实际拿到的权限裁剪，免得 Agent 去试它根本调不到的工具。
  * 开头那段服务标识是给多服务场景用的：同一个 Agent 挂着几个空间的 SocialHub 时，
  * 光看工具名分不出彼此，必须靠服务名把 id 的作用域框住。
+ *
+ * 接入说明把 HTTP 直调放在 MCP 注册前面：大多数 Agent 没有 MCP 运行时，
+ * 让它先去装一遍只会卡在第一步，而这个端点本来就是无状态的裸 JSON-RPC，谁都能打。
  */
-function buildPrompt({ serverName, cli, config, label, workspaceName, scopeText, scopes }: PromptInput): string {
+function buildPrompt({
+  serverName, cli, config, curl, token, label, workspaceName, scopeText, scopes,
+}: PromptInput): string {
   const tools = MCP_SCOPES.filter((s) => scopes.includes(s)).map((s) => SCOPE_TOOLS[s]).join('\n')
   const permissions = MCP_SCOPES.filter((s) => scopes.includes(s))
     .map((s) => SCOPE_LABELS[s].label)
     .join('、')
 
   const rules = [
-    '- 账号范围和权限都写死在密钥里。碰到 403 说明这个服务没这个权限，直接告诉我，不要换参数重试。',
+    '- 账号范围和权限都写死在密钥里。被拒绝说明这个服务没这个权限，直接告诉我，不要换参数重试。',
+    '- 分清两种 403：返回 JSON 的是权限不够；返回 HTML 页面的是网关拦了你的请求头（多半是 User-Agent）。',
     '- 平台取值：tiktok、instagram、youtube、twitter、facebook；作品类型：video、image、reel、story。',
     '- 时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
     '- 作品 id、账号 id 都是 uuid，不要自己编，先用查询类工具拿到真实 id。',
@@ -469,19 +491,45 @@ function buildPrompt({ serverName, cli, config, label, workspaceName, scopeText,
   }
 
   return [
-    `请先把 SocialHub 社媒管理系统的 MCP 服务 ${serverName} 接入你自己，再按后面的说明使用它。`,
+    `你要接入 SocialHub 社媒管理系统的服务 ${serverName}，然后按后面的说明使用它。`,
     '',
-    '第一步：接入（两种方式任选其一，做完再往下看）',
-    '方式 A —— 你能执行 shell 命令的话，直接跑这条：',
-    cli,
-    '方式 B —— 不能执行命令的话，把下面这段合并进你的 MCP 配置文件（mcpServers 字段下），然后重启：',
+    '━━ 第一步：怎么调用 ━━',
+    '',
+    '【默认走这条】直接发 HTTP 请求，不需要安装或配置任何东西。',
+    `- 地址：POST ${ENDPOINT}`,
+    '- 请求头三个，一个都不能少：',
+    `    Authorization: Bearer ${token}`,
+    '    Content-Type: application/json',
+    '    Accept: application/json, text/event-stream',
+    '  最后那个 Accept 必须原样照抄。只写 application/json 或者不写，服务器会直接返回',
+    '  406 Not Acceptable —— 这是接入失败最常见的原因，不是密钥问题。',
+    '- 这是无状态端点：不需要 initialize，不需要维持会话，每次请求都彼此独立。',
+    '- 只接受 POST。GET 或 DELETE 返回 405 是正常设计，不代表服务器坏了。',
+    '- 请求体是 JSON-RPC 2.0。查所有可用工具：',
+    '    {"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+    '  调用某个工具：',
+    '    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"工具名","arguments":{}}}',
+    '- 响应是 SSE 格式，两行：第一行 event: message，第二行 data: {...}。',
+    '  取 "data: " 后面那段 JSON。工具结果在 result.content[0].text 里，',
+    '  它本身还是一段 JSON 字符串，要再解析一次才是真正的数据。',
+    '  出错时看 error.message；result.isError 为 true 时，原因在 content[0].text。',
+    '- 如果你用 Python：请用 requests，或者手动设置 User-Agent。',
+    '  urllib 的默认 UA 会被网关拦掉返回 403，那不是权限问题。',
+    '- 完整示例：',
+    curl,
+    '',
+    '【只有你本身就支持 MCP 协议时才用这条】把这个服务注册进去：',
+    `- 能执行 shell 命令：${cli}`,
+    '- 只能改配置文件：把下面这段并进 mcpServers 字段，然后重启。',
     config,
-    `接入后先确认工具列表里出现了 ${firstTool(scopes)} 之类的工具；没出现就把报错原样告诉我，不要继续往下猜。`,
     '',
-    `第二步：以下说明只对 MCP 服务 ${serverName} 有效。`,
+    `接好之后先自检一次：调 tools/list，确认返回的工具里有 ${firstTool(scopes)}。`,
+    '如果失败，把 HTTP 状态码和完整响应原样发给我，不要自己改参数反复重试，也不要猜原因。',
+    '',
+    `━━ 第二步：以下说明只对服务 ${serverName} 有效 ━━`,
     '',
     '服务标识',
-    `- MCP 服务名：${serverName}`,
+    `- 服务名：${serverName}`,
     `- 服务地址：${ENDPOINT}`,
     `- 用途备注：${label || '（未填写）'}`,
     `- 工作空间：${workspaceName || '（未知）'}`,
@@ -490,7 +538,7 @@ function buildPrompt({ serverName, cli, config, label, workspaceName, scopeText,
     '',
     '多服务隔离',
     `- 我可能同时接入多个 SocialHub 服务，它们指向不同的工作空间或账号范围，数据互不相通。`,
-    `- 上面这些工具只能通过 ${serverName} 调用。别的 SocialHub 服务查到的作品 id、账号 id 拿到这里会直接 404，反之亦然，不要跨服务传递 id。`,
+    `- 上面这些工具只能配这把密钥用。别的 SocialHub 服务查到的作品 id、账号 id 拿到这里会直接 404，反之亦然，不要跨服务传递 id。`,
     `- 同时用到多个服务时，回答里要标明每条数据出自哪个服务，不要把它们合并成一份统计。`,
     '',
     '工作流',
