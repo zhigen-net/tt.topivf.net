@@ -177,6 +177,21 @@ export class CommentsService {
       .getCount()
   }
 
+  /** 账号列表页每行一个数。整页一次算完，逐行查会打满连接池 */
+  async pendingCountByAccount(workspaceId: string): Promise<Record<string, number>> {
+    const rows = await this.repo
+      .createQueryBuilder('c')
+      .select('c.accountId', 'accountId')
+      .addSelect('COUNT(*)', 'count')
+      .where('c.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('c.fromPage = false')
+      .andWhere('c.repliedAt IS NULL AND c.ignoredAt IS NULL')
+      .groupBy('c.accountId')
+      .getRawMany<{ accountId: string; count: string }>()
+
+    return Object.fromEntries(rows.map((r) => [r.accountId, Number(r.count)]))
+  }
+
   async reply(id: string, message: string, ws: WorkspaceContext): Promise<CommentWithRefs> {
     const comment = await this.findOne(id, ws)
     const account = await this.accounts.findOneBy({ id: comment.accountId, workspaceId: ws.id })

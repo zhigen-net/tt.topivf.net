@@ -18,6 +18,11 @@ export class CommentsController {
     return { count: await this.svc.pendingCount(ws.id) }
   }
 
+  @Get('pending-by-account')
+  pendingByAccount(@CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.pendingCountByAccount(ws.id)
+  }
+
   @Get()
   findAll(@Query() query: QueryCommentsDto, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.findAll(ws.id, query)

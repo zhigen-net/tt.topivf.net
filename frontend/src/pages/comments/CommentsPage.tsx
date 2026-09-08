@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Search, ChevronLeft, ChevronRight, RefreshCw, Send, EyeOff, Undo2, CornerDownRight,
+  Search, ChevronLeft, ChevronRight, RefreshCw, Send, EyeOff, Undo2, CornerDownRight, X,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,10 @@ export default function CommentsPage() {
   const { can } = useWorkspace()
   const canReply = can('member')
 
+  // 账号筛选放在地址栏里，账号管理页的「待回复」数字点过来才能带上，刷新也不丢
+  const [searchParams, setSearchParams] = useSearchParams()
+  const accountId = searchParams.get('accountId') ?? undefined
+
   const [status, setStatus] = useState<CommentStatus>('pending')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -39,11 +44,11 @@ export default function CommentsPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  useEffect(() => setPage(1), [search, status])
+  useEffect(() => setPage(1), [search, status, accountId])
 
   const params = useMemo(
-    () => ({ status, ...(search ? { search } : {}), page, limit: PAGE_SIZE }),
-    [status, search, page],
+    () => ({ status, ...(accountId ? { accountId } : {}), ...(search ? { search } : {}), page, limit: PAGE_SIZE }),
+    [status, accountId, search, page],
   )
 
   const { data, isLoading } = useQuery({
@@ -55,6 +60,7 @@ export default function CommentsPage() {
   function refresh() {
     qc.invalidateQueries({ queryKey: ['comments'] })
     qc.invalidateQueries({ queryKey: ['comments-pending'] })
+    qc.invalidateQueries({ queryKey: ['comments-pending-by-account'] })
   }
 
   const sync = useMutation({
@@ -126,6 +132,17 @@ export default function CommentsPage() {
             {t.label}
           </button>
         ))}
+
+        {accountId && (
+          <button
+            onClick={() => setSearchParams({}, { replace: true })}
+            className="ml-auto flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-accent"
+            title="取消账号筛选"
+          >
+            仅看 @{comments[0]?.account?.username ?? accountId.slice(0, 8)}
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       <div className="relative">

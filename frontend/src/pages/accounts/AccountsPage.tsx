@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, Search, RefreshCw, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -43,6 +44,12 @@ export default function AccountsPage() {
     queryKey: ['accounts', params],
     queryFn: () => api.get<PaginatedResponse<Account>>('/accounts', { params }).then((r) => r.data),
     placeholderData: keepPreviousData,
+  })
+
+  // 整个空间一次算完，不跟着分页走：翻页时数字不会闪
+  const { data: pendingComments } = useQuery({
+    queryKey: ['comments-pending-by-account'],
+    queryFn: () => api.get<Record<string, number>>('/comments/pending-by-account').then((r) => r.data),
   })
 
   // 抽屉里存 id 而不是对象，编辑保存后才能拿到刷新过的数据
@@ -133,6 +140,21 @@ export default function AccountsPage() {
     )
   }
 
+  /** 待回复评论数。0 条时不给链接，点进去只会看到空列表 */
+  function commentsCell(account: Account) {
+    const count = pendingComments?.[account.id] ?? 0
+    if (!count) return <span className="text-muted-foreground">—</span>
+    return (
+      <Link
+        to={`/comments?accountId=${account.id}`}
+        className="font-medium text-primary hover:underline underline-offset-2"
+        title={`查看 ${account.displayName} 的待回复评论`}
+      >
+        {count}
+      </Link>
+    )
+  }
+
   function avatar(account: Account, size: string) {
     return account.avatar ? (
       <img src={account.avatar} alt={account.displayName} className={`${size} shrink-0 rounded-full object-cover`} />
@@ -195,6 +217,11 @@ export default function AccountsPage() {
               <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
                 <span className="tabular-nums">
                   粉丝 {fmtNum(account.followers)} · 作品 {account.postsCount}
+                  {!!pendingComments?.[account.id] && (
+                    <> · 待回复 <Link to={`/comments?accountId=${account.id}`} className="font-medium text-primary">
+                      {pendingComments[account.id]}
+                    </Link></>
+                  )}
                   {account.proxyId && ` · 代理 ${account.proxyId.slice(0, 8)}…`}
                 </span>
                 <div className="flex shrink-0 gap-1">{rowActions(account)}</div>
@@ -213,6 +240,7 @@ export default function AccountsPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">状态</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">粉丝</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">作品</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">待回复评论</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">代理</th>
               <th className="px-4 py-3" />
             </tr>
@@ -220,11 +248,11 @@ export default function AccountsPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">加载中…</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">加载中…</td>
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                   {search ? '没有匹配的账号' : '还没有账号，点击右上角添加'}
                 </td>
               </tr>
@@ -248,6 +276,7 @@ export default function AccountsPage() {
                   <td className="px-4 py-3">{statusToggle(account)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtNum(account.followers)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{account.postsCount}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{commentsCell(account)}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{account.proxyId ? account.proxyId.slice(0, 8) + '…' : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">{rowActions(account)}</div>
