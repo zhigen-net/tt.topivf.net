@@ -14,7 +14,7 @@ import type { Asset, AssetType, PaginatedResponse } from '@/types'
 
 type Filter = 'all' | AssetType | 'unreferenced'
 
-const PAGE_SIZE = 48
+const PAGE_SIZE = 24
 
 export default function AssetsPage() {
   const qc = useQueryClient()

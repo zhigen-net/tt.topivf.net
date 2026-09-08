@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Search, RefreshCw, Trash2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, RefreshCw, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,12 +8,13 @@ import { PlatformBadge } from '@/components/PlatformBadge'
 import { AddAccountDialog } from '@/components/accounts/AddAccountDialog'
 import { AccountDetailDrawer } from '@/components/accounts/AccountDetailDrawer'
 import {
+  accountProfileUrl,
   accountStatusLabel as statusLabel, accountStatusVariant as statusVariant,
 } from '@/components/accounts/constants'
 import { api } from '@/lib/api'
 import type { Account, PaginatedResponse } from '@/types'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 export default function AccountsPage() {
   const qc = useQueryClient()
@@ -90,8 +91,22 @@ export default function AccountsPage() {
 
   /** 表格行和窄屏卡片共用 */
   function rowActions(account: Account) {
+    const profileUrl = accountProfileUrl(account)
     return (
       <>
+        {profileUrl && (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            title={`在平台上打开 ${account.displayName}`}
+          >
+            <a href={profileUrl} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
