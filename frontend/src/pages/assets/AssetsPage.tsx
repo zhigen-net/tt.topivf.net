@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { ChevronLeft, ChevronRight, Trash2, Upload } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Link2, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,9 @@ export default function AssetsPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [removing, setRemoving] = useState<Asset | null>(null)
+  // 存 id 不存对象：分享链接生成后列表会刷新，弹层得跟着拿到新的那份
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   // 每敲一个字就打一次接口没必要，停下来再查
   useEffect(() => {
@@ -67,8 +70,34 @@ export default function AssetsPage() {
     },
   })
 
+  const share = useMutation({
+    mutationFn: (id: string) => api.post<Pick<Asset, 'shareUrl' | 'shareExpiresAt'>>(`/assets/${id}/share`)
+      .then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+  })
+
+  const unshare = useMutation({
+    mutationFn: (id: string) => api.delete(`/assets/${id}/share`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+  })
+
   const assets = data?.data ?? []
   const totalPages = data?.totalPages ?? 1
+  const preview = assets.find((a) => a.id === previewId) ?? null
+
+  async function copyLink(a: Asset) {
+    const url = a.shareUrl ?? await share.mutateAsync(a.id).then((r) => r.shareUrl).catch(() => null)
+    if (!url) return
+
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(a.id)
+      setTimeout(() => setCopied((c) => (c === a.id ? null : c)), 2000)
+    } catch {
+      // 剪贴板可能被浏览器拦掉，退回预览层让用户自己选中复制
+      setPreviewId(a.id)
+    }
+  }
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
@@ -114,8 +143,10 @@ export default function AssetsPage() {
         </Select>
       </div>
 
-      {(upload.isError || remove.isError) && (
-        <p className="text-sm text-destructive">{errorText(upload.error ?? remove.error)}</p>
+      {(upload.isError || remove.isError || share.isError || unshare.isError) && (
+        <p className="text-sm text-destructive">
+          {errorText(upload.error ?? remove.error ?? share.error ?? unshare.error)}
+        </p>
       )}
 
       {isLoading ? (
@@ -132,13 +163,31 @@ export default function AssetsPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {assets.map((a) => (
             <div key={a.id} className="group overflow-hidden rounded-xl border bg-background">
-              <AssetThumb asset={a} className="aspect-square w-full" />
+              <button
+                onClick={() => setPreviewId(a.id)}
+                title="预览"
+                className="block w-full cursor-zoom-in"
+              >
+                <AssetThumb asset={a} className="aspect-square w-full" />
+              </button>
               <div className="space-y-1 p-2">
                 <p className="truncate text-xs font-medium" title={a.filename}>{a.filename}</p>
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-xs text-muted-foreground">{formatSize(a.size)}</span>
                   <div className="flex items-center gap-1">
                     {a.referenced && <Badge variant="secondary" className="text-[10px]">已引用</Badge>}
+                    {(canEdit || a.shareUrl) && (
+                      <button
+                        title={a.shareUrl ? '复制分享链接' : '生成并复制分享链接'}
+                        onClick={() => void copyLink(a)}
+                        disabled={share.isPending}
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent"
+                      >
+                        {copied === a.id
+                          ? <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          : <Link2 className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
                     {canEdit && !a.referenced && (
                       <button
                         title="删除"
@@ -166,6 +215,63 @@ export default function AssetsPage() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {preview && (
+        <Dialog open onOpenChange={(o) => !o && setPreviewId(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="truncate pr-6 text-base">{preview.filename}</DialogTitle>
+            </DialogHeader>
+
+            {preview.type === 'image' ? (
+              <img src={preview.url} alt={preview.filename} className="max-h-[60vh] w-full object-contain" />
+            ) : (
+              <video src={preview.url} controls className="max-h-[60vh] w-full bg-black" />
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {formatSize(preview.size)} · {preview.mimeType} · 上传于 {new Date(preview.createdAt).toLocaleDateString()}
+              </p>
+
+              {preview.shareUrl ? (
+                <>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={preview.shareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="flex-1 text-xs"
+                    />
+                    <Button variant="outline" onClick={() => void copyLink(preview)}>
+                      {copied === preview.id ? '已复制' : '复制'}
+                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => unshare.mutate(preview.id)}
+                        disabled={unshare.isPending}
+                      >
+                        撤销
+                      </Button>
+                    )}
+                  </div>
+                  {preview.shareExpiresAt && (
+                    <p className="text-xs text-muted-foreground">
+                      任何人都能打开，有效期至 {new Date(preview.shareExpiresAt).toLocaleDateString()}；撤销后立即失效。
+                    </p>
+                  )}
+                </>
+              ) : canEdit ? (
+                <Button variant="outline" onClick={() => void copyLink(preview)} disabled={share.isPending}>
+                  <Link2 className="h-4 w-4" />
+                  {share.isPending ? '生成中…' : '生成并复制分享链接'}
+                </Button>
+              ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {removing && (

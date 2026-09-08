@@ -1,12 +1,12 @@
 import {
-  BadRequestException, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
+  BadRequestException, Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe,
   Post, Query, Res, UploadedFile, UseInterceptors,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger'
 import type { Response } from 'express'
 import { ASSET_MAX_SIZE, AssetsService } from './assets.service'
-import { QueryAssetsDto } from './dto/asset.dto'
+import { QueryAssetsDto, ShareAssetDto } from './dto/asset.dto'
 import { Public } from '../auth/public.decorator'
 import { CurrentUser } from '../auth/current-user.decorator'
 import type { User } from '../users/user.entity'
@@ -52,15 +52,36 @@ export class AssetsController {
     return this.svc.remove(id, ws)
   }
 
-  // <img src> / <video src> 带不了 Authorization 头，所以这条路靠短时签名放行
+  @Post(':id/share')
+  @MinWorkspaceRole('member')
+  share(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ShareAssetDto,
+    @CurrentWorkspace() ws: WorkspaceContext,
+  ) {
+    return this.svc.share(id, ws, dto.days)
+  }
+
+  @Delete(':id/share')
+  @MinWorkspaceRole('member')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  unshare(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.unshare(id, ws)
+  }
+
+  // <img src> / <video src> 带不了 Authorization 头，所以这条路靠令牌放行：
+  // t 是页面用的短时签名，s 是能撤销的长期分享令牌
   @Public()
   @Get(':id/raw')
   async raw(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('t') token: string,
+    @Query('s') shareToken: string,
     @Res() res: Response,
   ) {
-    const { asset, stream } = await this.svc.openSigned(id, token ?? '')
+    const { asset, stream } = shareToken
+      ? await this.svc.openShared(id, shareToken)
+      : await this.svc.openSigned(id, token ?? '')
     res.setHeader('Content-Type', asset.mimeType)
     res.setHeader('Cache-Control', 'private, max-age=600')
     stream.pipe(res)

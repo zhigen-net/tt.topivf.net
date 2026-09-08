@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
 import { In, Repository } from 'typeorm'
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { extname } from 'path'
 import { Asset, type AssetType } from './asset.entity'
 import { AssetStorageService } from './asset-storage.service'
@@ -37,6 +37,9 @@ const PUBLISH_URL_TTL_MS = 60 * 60 * 1000
 
 /** 浏览器走的是 nginx 的 /api，后端自己的路由树上没有这一段 */
 const BROWSER_PREFIX = '/api'
+
+/** 分享链接的默认时长。够把链接发出去、对方过几天想起来还能打开。上限在 ShareAssetDto 里管 */
+const SHARE_TTL_DAYS_DEFAULT = 30
 
 export type AssetView = ReturnType<AssetsService['view']>
 
@@ -199,6 +202,27 @@ export class AssetsService {
     await this.storage.remove(asset.objectKey)
   }
 
+  /** 开一条分享链接；重复调用会换一个新令牌，旧链接当场失效 */
+  async share(id: string, ws: WorkspaceContext, days = SHARE_TTL_DAYS_DEFAULT) {
+    const asset = await this.findOne(id, ws)
+    if (!this.publicBase) {
+      throw new BadRequestException('未配置 PUBLIC_API_URL，无法生成分享链接')
+    }
+
+    asset.shareToken = randomBytes(24).toString('base64url')
+    asset.shareExpiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    await this.repo.save(asset)
+
+    return this.shareView(asset)
+  }
+
+  async unshare(id: string, ws: WorkspaceContext) {
+    const asset = await this.findOne(id, ws)
+    asset.shareToken = null
+    asset.shareExpiresAt = null
+    await this.repo.save(asset)
+  }
+
   /** 校验签名并回流对象内容；这条路没有 JWT，能不能读全看签名 */
   async openSigned(id: string, token: string) {
     const asset = await this.repo.findOneBy({ id })
@@ -209,6 +233,25 @@ export class AssetsService {
     if (!sig || !exp || exp < Date.now()) throw new ForbiddenException('链接已过期')
     if (!this.verify(this.payload(asset.id, asset.workspaceId, exp), sig)) {
       throw new ForbiddenException('链接签名无效')
+    }
+
+    return { asset, stream: await this.storage.get(asset.objectKey) }
+  }
+
+  /** 分享链接走这条：令牌是库里存的，撤销即刻生效 */
+  async openShared(id: string, token: string) {
+    const asset = await this.repo.findOneBy({ id })
+    if (!asset?.shareToken || !asset.shareExpiresAt) {
+      throw new ForbiddenException('分享链接已被撤销')
+    }
+    if (asset.shareExpiresAt.getTime() < Date.now()) {
+      throw new ForbiddenException('分享链接已过期')
+    }
+
+    const given = Buffer.from(token)
+    const expected = Buffer.from(asset.shareToken)
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      throw new ForbiddenException('分享链接无效')
     }
 
     return { asset, stream: await this.storage.get(asset.objectKey) }
@@ -226,6 +269,19 @@ export class AssetsService {
       createdAt: asset.createdAt,
       referenced,
       url: BROWSER_PREFIX + this.signedUrl(asset),
+      ...this.shareView(asset),
+    }
+  }
+
+  /** 已过期的分享当作没有，免得页面把一条打不开的链接摆在那里 */
+  private shareView(asset: Asset) {
+    const live = asset.shareToken
+      && asset.shareExpiresAt
+      && asset.shareExpiresAt.getTime() > Date.now()
+
+    return {
+      shareUrl: live ? `${this.publicBase}/v1/assets/${asset.id}/raw?s=${asset.shareToken}` : null,
+      shareExpiresAt: live ? asset.shareExpiresAt! : null,
     }
   }
 

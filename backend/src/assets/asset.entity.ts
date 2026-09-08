@@ -38,6 +38,16 @@ export class Asset {
   @Column({ name: 'uploaded_by', nullable: true })
   uploadedBy?: string
 
+  /**
+   * 分享链接的令牌。页面上那种带 HMAC 的签名直链是自包含的，签出去就撤不回来，
+   * 只能靠十分钟的短命期兜底；分享链接要活几十天，必须能随时作废，所以落库。
+   */
+  @Column({ name: 'share_token', type: 'varchar', nullable: true })
+  shareToken?: string | null
+
+  @Column({ name: 'share_expires_at', type: 'timestamp', nullable: true })
+  shareExpiresAt?: Date | null
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date
 }

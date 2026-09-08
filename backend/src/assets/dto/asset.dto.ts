@@ -5,6 +5,16 @@ import type { AssetType } from '../asset.entity'
 
 export const ASSET_TYPES = ['video', 'image'] as const
 
+export class ShareAssetDto {
+  @ApiPropertyOptional({ description: '链接有效天数，不填按默认值' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  days?: number
+}
+
 export class QueryAssetsDto {
   @ApiPropertyOptional({ enum: ASSET_TYPES })
   @IsOptional()
