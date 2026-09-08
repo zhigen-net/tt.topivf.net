@@ -19,7 +19,9 @@ import {
 import { AccountEditForm } from './AccountEditForm'
 import { api } from '@/lib/api'
 import { formatCount } from '@/lib/utils'
-import type { Account, PaginatedResponse, Proxy, PublishTask, Stats, TaskStatus } from '@/types'
+import type {
+  Account, AccountStatus, PaginatedResponse, Proxy, PublishTask, Stats, TaskStatus,
+} from '@/types'
 
 // 记录本次页面会话内已自动同步过的账号，避免重复请求
 const autoSyncedIds = new Set<string>()

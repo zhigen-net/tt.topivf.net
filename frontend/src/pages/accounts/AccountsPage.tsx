@@ -12,7 +12,7 @@ import {
   accountStatusLabel as statusLabel, accountStatusVariant as statusVariant,
 } from '@/components/accounts/constants'
 import { api } from '@/lib/api'
-import type { Account, PaginatedResponse } from '@/types'
+import type { Account, AccountStatus, PaginatedResponse } from '@/types'
 
 const PAGE_SIZE = 10
 
