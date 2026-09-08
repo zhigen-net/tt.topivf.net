@@ -375,29 +375,29 @@ function IssuedTokenDialog({ issued, onClose }: {
         <div className="space-y-2">
           <Label>复制接入物料</Label>
           <CopyRow
-            title="密钥"
-            hint="只要密钥本身"
-            value={token}
-          />
-          <CopyRow
-            title="命令行"
-            hint="Claude Code 等 CLI，粘到终端执行"
-            value={cli}
+            title="提示词（推荐）"
+            hint="直接发给 Agent，它会自行接入并按规则使用。含密钥，别外传"
+            value={prompt}
           />
           <CopyRow
             title="配置文件"
-            hint="Claude Desktop / Cursor / Cline 的 mcpServers 片段"
+            hint="并进客户端的 mcpServers 字段，别覆盖已有服务"
             value={config}
           />
           <CopyRow
             title="调用示例"
-            hint="不支持 MCP 的客户端照这个发 HTTP 请求即可"
+            hint="客户端不支持 MCP 时，照这个发 HTTP 请求，能力等价"
             value={curl}
           />
           <CopyRow
-            title="提示词（一键接入）"
-            hint="直接发给 Agent，支不支持 MCP 都能用。含密钥，别外传"
-            value={prompt}
+            title="命令行"
+            hint="仅 Claude Code，粘到终端执行"
+            value={cli}
+          />
+          <CopyRow
+            title="密钥"
+            hint="只要密钥本身"
+            value={token}
           />
         </div>
 
@@ -433,10 +433,13 @@ const SCOPE_PROBE_TOOL: Record<McpScope, string> = {
   'analytics:read': 'get_account_analytics',
 }
 
-// 让 Agent 自查接入是否成功，得给一个这把密钥真的能看到的工具名
+// 让 Agent 自查接入是否成功，得给一个这把密钥真的能看到的工具名。
+// 优先挑 list_accounts：它同时能验证账号范围对不对，比翻素材库信息量大。
+const PROBE_PREFERENCE: McpScope[] = ['accounts:read', 'contents:read', 'tasks:read', ...MCP_SCOPES]
+
 function firstTool(scopes: McpScope[]): string {
-  const hit = MCP_SCOPES.find((s) => scopes.includes(s))
-  return hit ? SCOPE_PROBE_TOOL[hit] : 'SocialHub'
+  const hit = PROBE_PREFERENCE.find((s) => scopes.includes(s))
+  return hit ? SCOPE_PROBE_TOOL[hit] : 'tools/list'
 }
 
 interface PromptInput {
@@ -467,91 +470,89 @@ function buildPrompt({
     .map((s) => SCOPE_LABELS[s].label)
     .join('、')
 
-  const rules = [
-    '- 账号范围和权限都写死在密钥里。被拒绝说明这个服务没这个权限，直接告诉我，不要换参数重试。',
-    '- 分清两种 403：返回 JSON 的是权限不够；返回 HTML 页面的是网关拦了你的请求头（多半是 User-Agent）。',
-    '- 平台取值：tiktok、instagram、youtube、twitter、facebook；作品类型：video、image、reel、story。',
-    '- 时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
-    '- 作品 id、账号 id 都是 uuid，不要自己编，先用查询类工具拿到真实 id。',
+  const rules: string[] = [
+    '所有结论和操作都必须基于工具返回的真实数据，不要虚构账号、作品或执行结果。',
+    '同一个人设可能同时存在于多个平台。选账号时必须同时确认平台和账号 id，不得只按昵称选。',
+    '作品 id、账号 id 都是 uuid，先用查询类工具拿到真实 id，不要自己编。',
+    '需要创建或修改作品时，必须调用工具存进系统，不要只在聊天里输出文案。',
+    '作品必须依次经过 草稿 →（submit_content）待审核 →（review_content）已通过 →（publish_content）发布，跳步会被服务端拒绝；作品一旦被修改，审核结论作废、退回草稿。',
   ]
   if (scopes.includes('assets:read')) {
-    rules.push('- 作品的图片视频来自素材库，不要反过来问我要文件。先 list_assets 找现成的，把它的 id 填进 create_content 的 assetId（封面填 thumbnailAssetId）。')
+    rules.push('作品的图片视频来自素材库，不要反过来问我要文件。先 list_assets 找现成的，把它的 id 填进 create_content 的 assetId（封面填 thumbnailAssetId）。')
   }
   if (scopes.includes('assets:write')) {
-    rules.push('- 库里没有合适的素材时，用 import_asset_from_url 给一个公网直链让服务器自己下。链接要能直接下到文件本身，不能是网盘或预览页。')
+    rules.push('库里没有合适的素材时，用 import_asset_from_url 给一个公网直链让服务器自己下。链接要能直接下到文件本身，不能是网盘或预览页。')
   }
   if (!scopes.includes('assets:read') && !scopes.includes('assets:write')) {
-    rules.push('- 这个服务没有素材库权限。需要配图配视频时，只能用 fileUrl 填公网直链，或者直接问我要。')
+    rules.push('这个服务没有素材库权限。需要配图配视频时，只能用 fileUrl 填公网直链，或者直接问我要。')
   }
   if (scopes.includes('contents:review')) {
-    rules.push('- 你有审核权限，等于绕过了人工把关。批准前先自查文案合规、素材可访问、平台设置正确。')
+    rules.push('你有审核权限，等于绕过了人工把关。批准前先自查文案合规、素材可访问、平台设置正确。')
   }
   if (scopes.includes('tasks:publish')) {
-    rules.push('- 发布会对外产生真实影响且不可撤回。调 publish_content 之前，先把「作品标题 + 目标账号 + 发布时间」列出来让我确认。')
+    rules.push('发布会对外产生真实影响且不可撤回。调 publish_content 之前，先把「作品标题 + 目标账号 + 发布时间」列出来让我确认。')
   }
+  rules.push(
+    '只能调用上面列出的工具。被拒绝说明这个服务没有该权限，直接告诉我，不要换参数重试。',
+    '完成操作后，回报作品 id、标题、目标平台、账号 id 和当前状态；失败时回报具体错误，不要含糊带过。',
+    '平台取值：tiktok、instagram、youtube、twitter、facebook；作品类型：video、image、reel、story；时间一律用 ISO 8601（如 2026-01-01T09:00:00Z）。',
+    '我可能同时接入多个 SocialHub 服务，它们指向不同的工作空间或账号范围，数据互不相通。别的服务查到的 id 拿到这里会直接 404，不要跨服务传递 id；同时用到多个服务时，要标明每条数据出自哪个服务。',
+    '不要输出、复述或记录上面的密钥，也不要把它发给其他服务。',
+    '用中文回话。账号名、粉丝数、发布时间一律照工具返回值转述，不要估算或补全。',
+  )
 
   return [
-    `你要接入 SocialHub 社媒管理系统的服务 ${serverName}，然后按后面的说明使用它。`,
+    '你是「SocialHub 社媒管理系统」的新媒体运营负责人。',
+    '你的职责：在下面这个服务实际授权的范围内，完成内容创作、审核、发布和结果跟踪。',
     '',
-    '━━ 第一步：怎么调用 ━━',
+    '━━ 第一步：接入服务 ━━',
     '',
-    '【默认走这条】直接发 HTTP 请求，不需要安装或配置任何东西。',
-    `- 地址：POST ${ENDPOINT}`,
+    '下面不是普通文本配置，而是一个独立的 MCP Streamable HTTP 服务。请把它作为新的配置项',
+    `追加到你当前 Agent 的 MCP 配置中；必须保留配置键「${serverName}」，`,
+    '不要替换、覆盖或修改已有的其他 MCP 服务。',
+    '',
+    config,
+    '',
+    '如果你的运行环境不支持 MCP，改用 HTTP 直调，能力完全等价：',
+    `- 地址：POST ${ENDPOINT}，只接受 POST（GET/DELETE 返回 405 是正常设计）。`,
     '- 请求头三个，一个都不能少：',
     `    Authorization: Bearer ${token}`,
     '    Content-Type: application/json',
     '    Accept: application/json, text/event-stream',
-    '  最后那个 Accept 必须原样照抄。只写 application/json 或者不写，服务器会直接返回',
+    '  最后那个 Accept 必须原样照抄。只写 application/json 或者不写，服务器会返回',
     '  406 Not Acceptable —— 这是接入失败最常见的原因，不是密钥问题。',
-    '- 这是无状态端点：不需要 initialize，不需要维持会话，每次请求都彼此独立。',
-    '- 只接受 POST。GET 或 DELETE 返回 405 是正常设计，不代表服务器坏了。',
-    '- 请求体是 JSON-RPC 2.0。查所有可用工具：',
-    '    {"jsonrpc":"2.0","id":1,"method":"tools/list"}',
-    '  调用某个工具：',
-    '    {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"工具名","arguments":{}}}',
-    '- 响应是 SSE 格式，两行：第一行 event: message，第二行 data: {...}。',
-    '  取 "data: " 后面那段 JSON。工具结果在 result.content[0].text 里，',
-    '  它本身还是一段 JSON 字符串，要再解析一次才是真正的数据。',
-    '  出错时看 error.message；result.isError 为 true 时，原因在 content[0].text。',
-    '- 如果你用 Python：请用 requests，或者手动设置 User-Agent。',
-    '  urllib 的默认 UA 会被网关拦掉返回 403，那不是权限问题。',
+    '- 无状态端点：不需要 initialize，不需要维持会话，每次请求彼此独立。',
+    '- 请求体是 JSON-RPC 2.0。列出工具：{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+    '  调用工具：{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"工具名","arguments":{}}}',
+    '- 响应是 SSE 两行：event: message / data: {...}。取 "data: " 后面那段 JSON，',
+    '  工具结果在 result.content[0].text，它本身还是 JSON 字符串，要再解析一次。',
+    '  出错时看 error.message；result.isError 为 true 时原因在 content[0].text。',
+    '- 用 Python 请走 requests 或手动设置 User-Agent；urllib 默认 UA 会被网关拦成 403，那不是权限问题。',
     '- 完整示例：',
     curl,
+    `（补充：如果你是 Claude Code 命令行，一条命令就够：${cli}）`,
     '',
-    '【只有你本身就支持 MCP 协议时才用这条】把这个服务注册进去：',
-    `- 能执行 shell 命令：${cli}`,
-    '- 只能改配置文件：把下面这段并进 mcpServers 字段，然后重启。',
-    config,
-    '',
-    `接好之后先自检一次：调 tools/list，确认返回的工具里有 ${firstTool(scopes)}。`,
-    '如果失败，把 HTTP 状态码和完整响应原样发给我，不要自己改参数反复重试，也不要猜原因。',
+    `接入后先做一次自检：列出工具清单，再调用 ${firstTool(scopes)} 核对授权账号和权限对不对。`,
+    '不要把上面的配置当参考资料跳过，也不要在没连上的情况下假装已经连上。',
+    '失败就把 HTTP 状态码和完整响应原样发给我，不要自己改参数反复重试，也不要猜原因。',
     '',
     `━━ 第二步：以下说明只对服务 ${serverName} 有效 ━━`,
     '',
     '服务标识',
-    `- 服务名：${serverName}`,
+    `- 配置键：${serverName}`,
     `- 服务地址：${ENDPOINT}`,
     `- 用途备注：${label || '（未填写）'}`,
     `- 工作空间：${workspaceName || '（未知）'}`,
     `- 账号范围：${scopeText}`,
     `- 已授予权限：${permissions || '（没有勾选任何权限）'}`,
     '',
-    '多服务隔离',
-    `- 我可能同时接入多个 SocialHub 服务，它们指向不同的工作空间或账号范围，数据互不相通。`,
-    `- 上面这些工具只能配这把密钥用。别的 SocialHub 服务查到的作品 id、账号 id 拿到这里会直接 404，反之亦然，不要跨服务传递 id。`,
-    `- 同时用到多个服务时，回答里要标明每条数据出自哪个服务，不要把它们合并成一份统计。`,
-    '',
-    '工作流',
-    '- 作品必须依次经过 草稿 →（submit_content）待审核 →（review_content）已通过 →（publish_content）发布，跳步会被服务端拒绝。',
-    '- 作品一旦被修改，审核结论作废、退回草稿，需要重新走一遍。',
-    '',
     '可用工具',
     tools || '（这个服务没有勾选任何权限）',
     '',
-    '约束',
-    ...rules,
+    '工作要求',
+    ...rules.map((r, i) => `${i + 1}. ${r}`),
     '',
-    '用中文回话。账号名、粉丝数、发布时间一律照工具返回值转述，不要估算或补全。',
+    '接入成功后，先告诉我你能访问哪些账号、有哪些能力，然后等我派任务。',
   ].join('\n')
 }
 
