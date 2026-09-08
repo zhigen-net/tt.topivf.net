@@ -80,6 +80,20 @@ export class McpService {
   }
 
   private registerAssetsWrite(server: McpServer, { ws, user }: McpContext) {
+    server.registerTool('upload_asset', {
+      title: '上传素材',
+      description: '把图片或视频的内容直接传进素材库，不需要先托管到公网。'
+        + '返回的 id 可以直接挂到作品的 assetId 上。',
+      inputSchema: {
+        filename: z.string().min(1).max(200).describe('带扩展名的文件名，例如 poster.png'),
+        data: z.string().min(1).describe('文件内容的 base64，也可以整串传 data:image/png;base64,...'),
+        mimeType: z.string().max(100).optional()
+          .describe('例如 image/png；data 带了 data: 前缀时可以省略'),
+      },
+    }, async ({ filename, data, mimeType }) => (
+      json(assetView(await this.assets.uploadInline(data, filename, mimeType, ws, user)))
+    ))
+
     server.registerTool('import_asset_from_url', {
       title: '从链接导入素材',
       description: '让服务器去下载一个公网上的图片或视频，存进素材库并返回 id。'

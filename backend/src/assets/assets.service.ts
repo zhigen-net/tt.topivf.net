@@ -25,6 +25,12 @@ const MIME_TYPES: Record<string, AssetType> = {
 // 上传走内存缓冲，这个上限同时是 multer 的硬闸，超了直接 413
 export const ASSET_MAX_SIZE = Number(process.env.ASSET_MAX_SIZE) || 200 * 1024 * 1024
 
+/**
+ * MCP 那条路只能把文件塞进 JSON 参数里，base64 还要再涨三分之一，
+ * 拿 200MB 的视频上限去量它会直接把内存打穿，所以内联上传另设一道闸。
+ */
+export const ASSET_INLINE_MAX_SIZE = Number(process.env.ASSET_INLINE_MAX_SIZE) || 12 * 1024 * 1024
+
 /** 签名读链接的有效期。够页面加载完，短到捡到链接也没什么用 */
 const RAW_URL_TTL_MS = 10 * 60 * 1000
 const PUBLISH_URL_TTL_MS = 60 * 60 * 1000
@@ -63,6 +69,39 @@ export class AssetsService {
 
   async upload(file: Express.Multer.File, ws: WorkspaceContext, actor: User) {
     return this.persist(file.buffer, file.originalname, file.mimetype, ws, actor)
+  }
+
+  /**
+   * 把调用方直接带过来的文件内容存进素材库。data 可以是裸 base64，
+   * 也可以是整串 data:image/png;base64,xxx。
+   */
+  async uploadInline(
+    data: string,
+    filename: string,
+    mimeType: string | undefined,
+    ws: WorkspaceContext,
+    actor: User,
+  ) {
+    const uri = /^data:([\w.+-]+\/[\w.+-]+)?[^,]*;base64,/i.exec(data)
+    const payload = (uri ? data.slice(uri[0].length) : data).replace(/\s/g, '')
+
+    if (!payload) throw new BadRequestException('素材内容是空的')
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) {
+      throw new BadRequestException('素材内容不是合法的 base64')
+    }
+    // 先按字符数估算大小，别为了报个超限先把几十兆解出来
+    if ((payload.length * 3) / 4 > ASSET_INLINE_MAX_SIZE) {
+      throw new BadRequestException(
+        `直接上传的文件不能超过 ${ASSET_INLINE_MAX_SIZE} 字节，更大的文件请先放到公网再用链接导入`,
+      )
+    }
+
+    const declared = mimeType ?? uri?.[1]
+    if (!declared) {
+      throw new BadRequestException('缺少 mimeType，或者把 data 写成 data:image/png;base64,... 的形式')
+    }
+
+    return this.persist(Buffer.from(payload, 'base64'), filename, declared.toLowerCase(), ws, actor)
   }
 
   /** 让服务器去拉一个外部地址，地址可能来自 AI，内网防护在 fetchRemoteFile 里 */

@@ -1,10 +1,18 @@
 import { NestFactory, Reflector } from '@nestjs/core'
 import { ClassSerializerInterceptor, ValidationPipe, VersioningType } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { json, urlencoded } from 'express'
 import { AppModule } from './app.module'
+import { ASSET_INLINE_MAX_SIZE } from './assets/assets.service'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create(AppModule, { bodyParser: false })
+
+  // MCP 只能把素材塞进 JSON 参数里，这条路的报文天生比别处大一个量级，
+  // base64 还要再涨三分之一。单独给它放宽，其余路由维持小上限。
+  app.use('/v1/mcp', json({ limit: Math.ceil(ASSET_INLINE_MAX_SIZE * 1.4) }))
+  app.use(json({ limit: '1mb' }))
+  app.use(urlencoded({ extended: true, limit: '1mb' }))
 
   app.enableCors({ origin: true, credentials: true })
 
