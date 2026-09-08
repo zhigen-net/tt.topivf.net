@@ -36,6 +36,7 @@ export class TasksService {
     accountId?: string,
     contentId?: string,
     search?: string,
+    accountScope?: string[],
   ) {
     const qb = this.repo.createQueryBuilder('t')
       .leftJoinAndSelect('t.content', 'content')
@@ -47,6 +48,12 @@ export class TasksService {
     // account_ids 是 text[]，包含判断得用数组包含运算符
     if (accountId) qb.andWhere('t.accountIds @> ARRAY[:accountId]::text[]', { accountId })
     if (contentId) qb.andWhere('t.contentId = :contentId', { contentId })
+    // 限定了可见账号就得在 SQL 里筛掉，否则 total 会把看不见的任务也算进去
+    if (accountScope) {
+      qb.andWhere('t.accountIds && ARRAY[:...accountScope]::text[]', {
+        accountScope: accountScope.length ? accountScope : [''],
+      })
+    }
     // 任务本身没有名字，列表上认的是作品标题，所以搜的是关联作品
     if (search) qb.andWhere('content.title ILIKE :search', { search: `%${search}%` })
 

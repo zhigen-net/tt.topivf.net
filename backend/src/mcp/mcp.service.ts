@@ -211,11 +211,8 @@ export class McpService {
       },
     }, async ({ page = 1, limit = 20, accountId, contentId }) => {
       if (accountId) this.assertAccountsAllowed(key, [accountId])
-      const res = await this.tasks.findAll(ws.id, page, limit, accountId, contentId)
-      const visible = key.accountIds
-        ? res.data.filter((t) => t.accountIds.some((id) => key.accountIds!.includes(id)))
-        : res.data
-      return json({ total: res.total, page: res.page, data: visible.map(taskView) })
+      const res = await this.tasks.findAll(ws.id, page, limit, accountId, contentId, undefined, key.accountIds ?? undefined)
+      return json({ total: res.total, page: res.page, data: res.data.map(taskView) })
     })
   }
 
