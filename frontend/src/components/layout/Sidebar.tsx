@@ -2,7 +2,10 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Users, FileVideo, Settings, Globe, LogOut,
   LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight, TrendingUp,
+  MessageSquare,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
@@ -14,6 +17,7 @@ const nav = [
   { to: '/accounts', icon: Users, label: '账号管理' },
   { to: '/contents', icon: FileVideo, label: '作品管理' },
   { to: '/assets', icon: Images, label: '素材库' },
+  { to: '/comments', icon: MessageSquare, label: '评论' },
   { to: '/analytics', icon: TrendingUp, label: '数据分析' },
   { to: '/mcp', icon: Plug, label: 'MCP 服务' },
   { to: '/workspace', icon: Building2, label: '工作空间' },
@@ -25,6 +29,13 @@ export function Sidebar() {
   const navigate = useNavigate()
   const { me, isAdmin } = useMe()
   const { workspace } = useWorkspace()
+
+  // 待处理评论的角标。评论是别人发来的，不刷新就看不到，所以这里自己轮询
+  const { data: pending } = useQuery({
+    queryKey: ['comments-pending'],
+    queryFn: () => api.get<{ count: number }>('/comments/pending-count').then((r) => r.data.count),
+    refetchInterval: 60_000,
+  })
 
   function logout() {
     localStorage.removeItem('token')
@@ -57,6 +68,11 @@ export function Sidebar() {
           >
             <Icon className="h-4 w-4" />
             {label}
+            {to === '/comments' && !!pending && (
+              <span className="ml-auto rounded-full bg-muted px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                {pending > 99 ? '99+' : pending}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

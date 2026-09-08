@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics, PlatformComment } from '../platform.adapter'
 import { graphGet, graphPost, graphUpload, GraphError } from './graph-api'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
@@ -13,7 +13,22 @@ const VIDEO_POLL_INTERVAL_MS = 5_000
 const VIDEO_POLL_MAX_ATTEMPTS = 60
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv']
 
+const COMMENTS_PER_POST = 100
+
 type VideoOutcome = 'ready' | 'failed' | 'timeout' | 'unverified'
+
+interface FacebookPostWithComments {
+  id: string
+  comments?: {
+    data?: Array<{
+      id: string
+      message?: string
+      created_time: string
+      from?: { id?: string; name?: string }
+      parent?: { id?: string }
+    }>
+  }
+}
 
 @Injectable()
 export class FacebookAdapter extends PlatformAdapter {
@@ -149,6 +164,55 @@ export class FacebookAdapter extends PlatformAdapter {
       this.logger.warn(`拉取 Facebook 贴文指标失败 ${platformPostId}: ${err}`)
       return null
     }
+  }
+
+  /**
+   * 一次请求把近期贴文和它们的评论一起拿回来。filter(stream) 会把楼中楼也拍平进
+   * 同一个列表并带上 parent，所以不用为每条评论再翻一次回复。
+   */
+  async fetchComments(account: Account, postLimit: number): Promise<PlatformComment[] | null> {
+    const session = readSession(account)
+    if (!session) return null
+
+    try {
+      const res = await graphGet<{ data?: FacebookPostWithComments[] }>(
+        `/${session.pageId}/published_posts`,
+        {
+          limit: String(postLimit),
+          fields: `id,comments.filter(stream).limit(${COMMENTS_PER_POST})`
+            + '{id,message,created_time,from,parent}',
+        },
+        session.pageAccessToken,
+      )
+
+      return (res.data ?? []).flatMap((post) => (
+        (post.comments?.data ?? []).map((c) => ({
+          id: c.id,
+          postId: post.id,
+          parentId: c.parent?.id,
+          message: c.message ?? '',
+          authorId: c.from?.id,
+          authorName: c.from?.name,
+          postedAt: new Date(c.created_time),
+          fromPage: c.from?.id === session.pageId,
+        }))
+      ))
+    } catch (err) {
+      this.logger.warn(`拉取 Facebook 评论失败 ${account.username}: ${err}`)
+      return null
+    }
+  }
+
+  async replyComment(account: Account, platformCommentId: string, message: string): Promise<string> {
+    const session = readSession(account)
+    if (!session) throw new Error('主页未授权，请先绑定 Facebook 主页')
+
+    const res = await graphPost<{ id: string }>(
+      `/${platformCommentId}/comments`,
+      { message },
+      session.pageAccessToken,
+    )
+    return res.id
   }
 
   private async fetchImpressions(postId: string, token: string): Promise<number> {

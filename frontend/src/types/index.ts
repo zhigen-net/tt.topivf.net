@@ -234,6 +234,27 @@ export interface PostsSummary {
   measured: number
 }
 
+export type CommentStatus = 'pending' | 'replied' | 'ignored' | 'all'
+
+export interface Comment {
+  id: string
+  accountId: string
+  platform: Platform
+  platformCommentId: string
+  platformPostId: string
+  parentCommentId?: string | null
+  authorId?: string | null
+  authorName?: string | null
+  message: string
+  postedAt: string
+  repliedAt?: string | null
+  ignoredAt?: string | null
+  createdAt: string
+  account?: Pick<Account, 'id' | 'username' | 'displayName' | 'platform' | 'avatar'>
+  /** 我们已经回过的内容，跟在评论后面展示 */
+  reply?: { message: string; postedAt: string } | null
+}
+
 export const MCP_SCOPES = [
   'assets:read',
   'assets:write',
@@ -244,6 +265,8 @@ export const MCP_SCOPES = [
   'tasks:read',
   'tasks:publish',
   'analytics:read',
+  'comments:read',
+  'comments:write',
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]

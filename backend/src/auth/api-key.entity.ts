@@ -15,6 +15,8 @@ export const MCP_SCOPES = [
   'tasks:read',
   'tasks:publish',
   'analytics:read',
+  'comments:read',
+  'comments:write',
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]

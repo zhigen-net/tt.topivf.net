@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard'
 import AccountsPage from '@/pages/accounts/AccountsPage'
 import ContentsPage from '@/pages/contents/ContentsPage'
 import AssetsPage from '@/pages/assets/AssetsPage'
+import CommentsPage from '@/pages/comments/CommentsPage'
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import WorkspacePage from '@/pages/workspace/WorkspacePage'
 import { WorkspaceLayout } from '@/pages/workspace/WorkspaceLayout'
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/contents" element={<ContentsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route path="/comments" element={<CommentsPage />} />
                 <Route path="/workspace" element={<WorkspaceLayout />}>
                   <Route index element={<WorkspacePage />} />
                   <Route element={<RequireWorkspaceManager />}>

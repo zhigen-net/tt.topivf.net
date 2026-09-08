@@ -29,6 +29,8 @@ const SCOPE_LABELS: Record<McpScope, { label: string; hint: string }> = {
   'tasks:read': { label: '查看发布任务', hint: '读取排期与发布结果' },
   'tasks:publish': { label: '发布作品', hint: 'AI 可以把已过审的作品真的发出去' },
   'analytics:read': { label: '查看数据趋势', hint: '读取粉丝、互动的历史快照' },
+  'comments:read': { label: '查看评论', hint: '读取各平台贴文下的评论与已有回复' },
+  'comments:write': { label: '回复 / 忽略评论', hint: 'AI 可以用账号身份把回复真的发到平台上，发出去撤不回' },
 }
 
 const ENDPOINT = `${window.location.origin}/api/v1/mcp`
@@ -300,9 +302,10 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
                 </button>
               ))}
             </div>
-            {(scopes.includes('contents:review') || scopes.includes('tasks:publish')) && (
+            {(scopes.includes('contents:review') || scopes.includes('tasks:publish')
+              || scopes.includes('comments:write')) && (
               <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                已授予审核或发布权限：AI 可以不经人工确认就把内容发到真实账号上。
+                已授予审核、发布或回复权限：AI 可以不经人工确认就把内容发到真实账号上。
               </p>
             )}
           </Section>
@@ -419,6 +422,8 @@ const SCOPE_TOOLS: Record<McpScope, string> = {
   'tasks:read': '- list_tasks：查发布任务的排队、执行与结果',
   'tasks:publish': '- publish_content：把已过审的作品投到指定账号，scheduledAt 留空表示立即发布',
   'analytics:read': '- get_account_analytics：读某个账号的粉丝、互动历史快照',
+  'comments:read': '- list_comments：翻各平台贴文下的评论，默认只看待处理的；已回过的会带上回复内容',
+  'comments:write': '- reply_comment：以账号身份把回复发到平台，立刻公开且撤不回，发之前必须让人确认文案\n- ignore_comment：把不用回的评论移出待处理，不碰平台',
 }
 
 const SCOPE_PROBE_TOOL: Record<McpScope, string> = {
@@ -431,6 +436,8 @@ const SCOPE_PROBE_TOOL: Record<McpScope, string> = {
   'tasks:read': 'list_tasks',
   'tasks:publish': 'publish_content',
   'analytics:read': 'get_account_analytics',
+  'comments:read': 'list_comments',
+  'comments:write': 'reply_comment',
 }
 
 // 让 Agent 自查接入是否成功，得给一个这把密钥真的能看到的工具名。
@@ -491,6 +498,9 @@ function buildPrompt({
   }
   if (scopes.includes('tasks:publish')) {
     rules.push('发布会对外产生真实影响且不可撤回。调 publish_content 之前，先把「作品标题 + 目标账号 + 发布时间」列出来让我确认。')
+  }
+  if (scopes.includes('comments:write')) {
+    rules.push('回复评论会以账号本人的身份公开发出且撤不回。调 reply_comment 之前，先把「原评论 + 拟回复文案 + 用哪个账号回」列出来让我确认；广告、辱骂、明显钓鱼的评论直接 ignore_comment，不要回。')
   }
   rules.push(
     '只能调用上面列出的工具。被拒绝说明这个服务没有该权限，直接告诉我，不要换参数重试。',

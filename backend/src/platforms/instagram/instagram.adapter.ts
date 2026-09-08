@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { PlatformAdapter, PostResult, AccountStats, PostMetrics } from '../platform.adapter'
+import { PlatformAdapter, PostResult, AccountStats, PostMetrics, PlatformComment } from '../platform.adapter'
 import { graphGet, graphPost, GraphError } from '../facebook/graph-api'
 import type { Account } from '../../accounts/account.entity'
 import type { Content } from '../../contents/content.entity'
@@ -13,7 +13,23 @@ const POLL_INTERVAL_MS = 5_000
 const POLL_MAX_ATTEMPTS = 60
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv']
 
+const COMMENTS_PER_POST = 50
+const REPLIES_PER_COMMENT = 50
+
 type ContainerOutcome = { ok: true } | { ok: false; error: string }
+
+interface IgComment {
+  id: string
+  text?: string
+  timestamp: string
+  username?: string
+  from?: { id?: string; username?: string }
+}
+
+interface IgMediaWithComments {
+  id: string
+  comments?: { data?: Array<IgComment & { replies?: { data?: IgComment[] } }> }
+}
 
 /**
  * 走官方 Instagram Graph API，不碰浏览器。凭证就是关联主页的 Page Access Token，
@@ -186,6 +202,64 @@ export class InstagramAdapter extends PlatformAdapter {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
     }
     return { ok: false, error: '素材处理未在预期时间内完成' }
+  }
+
+  /**
+   * Instagram 的楼中楼是嵌在评论的 replies 里的，不像 Facebook 能拍平，
+   * 所以顺手把 replies 展开成同一批返回，父子关系用 parentId 记住。
+   */
+  async fetchComments(account: Account, postLimit: number): Promise<PlatformComment[] | null> {
+    const session = readSession(account)
+    if (!session) return null
+
+    try {
+      const res = await graphGet<{ data?: IgMediaWithComments[] }>(
+        `/${session.igUserId}/media`,
+        {
+          limit: String(postLimit),
+          fields: `id,comments.limit(${COMMENTS_PER_POST})`
+            + '{id,text,timestamp,username,from,'
+            + `replies.limit(${REPLIES_PER_COMMENT}){id,text,timestamp,username,from}}`,
+        },
+        session.pageAccessToken,
+      )
+
+      const mine = (c: IgComment) => (
+        c.from?.id ? c.from.id === session.igUserId : c.username === account.username
+      )
+      const normalize = (c: IgComment, postId: string, parentId?: string): PlatformComment => ({
+        id: c.id,
+        postId,
+        parentId,
+        message: c.text ?? '',
+        authorId: c.from?.id,
+        authorName: c.from?.username ?? c.username,
+        postedAt: new Date(c.timestamp),
+        fromPage: mine(c),
+      })
+
+      return (res.data ?? []).flatMap((media) => (
+        (media.comments?.data ?? []).flatMap((c) => [
+          normalize(c, media.id),
+          ...(c.replies?.data ?? []).map((r) => normalize(r, media.id, c.id)),
+        ])
+      ))
+    } catch (err) {
+      this.logger.warn(`拉取 Instagram 评论失败 @${account.username}: ${err}`)
+      return null
+    }
+  }
+
+  async replyComment(account: Account, platformCommentId: string, message: string): Promise<string> {
+    const session = readSession(account)
+    if (!session) throw new Error('账号未授权，请先绑定关联了主页的 Instagram 专业账号')
+
+    const res = await graphPost<{ id: string }>(
+      `/${platformCommentId}/replies`,
+      { message },
+      session.pageAccessToken,
+    )
+    return res.id
   }
 
   /** 帖子链接要用短码拼，本地凑不出来，只能回头问一次；快拍没有链接 */

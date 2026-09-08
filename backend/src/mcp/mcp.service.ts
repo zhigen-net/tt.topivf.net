@@ -8,6 +8,8 @@ import { AccountsService } from '../accounts/accounts.service'
 import { TasksService } from '../tasks/tasks.service'
 import { AnalyticsService } from '../analytics/analytics.service'
 import { AssetsService, type AssetView } from '../assets/assets.service'
+import { CommentsService, type CommentWithRefs } from '../comments/comments.service'
+import { COMMENT_STATUSES } from '../comments/dto/query-comments.dto'
 import { CONTENT_TYPES } from '../contents/dto/create-content.dto'
 import { REVIEW_STATUSES } from '../contents/dto/review-content.dto'
 import { PLATFORMS, type Account } from '../accounts/account.entity'
@@ -34,6 +36,7 @@ export class McpService {
     private readonly tasks: TasksService,
     private readonly analytics: AnalyticsService,
     private readonly assets: AssetsService,
+    private readonly comments: CommentsService,
   ) {}
 
   build(ctx: McpContext): McpServer {
@@ -49,6 +52,8 @@ export class McpService {
     if (has('tasks:read')) this.registerTasksRead(server, ctx)
     if (has('tasks:publish')) this.registerTasksPublish(server, ctx)
     if (has('analytics:read')) this.registerAnalyticsRead(server, ctx)
+    if (has('comments:read')) this.registerCommentsRead(server, ctx)
+    if (has('comments:write')) this.registerCommentsWrite(server, ctx)
 
     return server
   }
@@ -256,6 +261,61 @@ export class McpService {
     })
   }
 
+  private registerCommentsRead(server: McpServer, { ws, key }: McpContext) {
+    server.registerTool('list_comments', {
+      title: '查询评论',
+      description: '读取各平台贴文下的评论。默认只看还没回复也没忽略的，'
+        + '用来判断该回什么。已经回过的评论会带上回复内容。',
+      inputSchema: {
+        status: z.enum(COMMENT_STATUSES).optional().describe('默认 pending，即待处理'),
+        accountId: z.string().uuid().optional(),
+        platform: z.enum(PLATFORMS).optional(),
+        search: z.string().max(200).optional().describe('评论正文关键词'),
+        page: z.number().int().min(1).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    }, async (args) => {
+      if (args.accountId) this.assertAccountsAllowed(key, [args.accountId])
+      const res = await this.comments.findAll(ws.id, args, key.accountIds ?? undefined)
+      return json({
+        total: res.total,
+        page: res.page,
+        totalPages: res.totalPages,
+        data: res.data.map(commentView),
+      })
+    })
+  }
+
+  private registerCommentsWrite(server: McpServer, { ws, key }: McpContext) {
+    server.registerTool('reply_comment', {
+      title: '回复评论',
+      description: '以账号本人的身份把回复发到平台上。这条回复会立刻对所有人可见且无法撤回，'
+        + '调用前必须先把拟好的文案给人看过并得到确认。',
+      inputSchema: {
+        id: z.string().uuid().describe('list_comments 返回的评论 id'),
+        message: z.string().min(1).max(8000),
+      },
+    }, async ({ id, message }) => {
+      const comment = await this.comments.findOne(id, ws)
+      this.assertAccountsAllowed(key, [comment.accountId])
+      return json(commentView(await this.comments.reply(id, message, ws)))
+    })
+
+    server.registerTool('ignore_comment', {
+      title: '忽略评论',
+      description: '把一条不需要回复的评论移出待处理列表，不会对平台做任何操作。'
+        + 'ignored 传 false 可以放回待处理。',
+      inputSchema: {
+        id: z.string().uuid(),
+        ignored: z.boolean().optional().describe('默认 true'),
+      },
+    }, async ({ id, ignored = true }) => {
+      const comment = await this.comments.findOne(id, ws)
+      this.assertAccountsAllowed(key, [comment.accountId])
+      return json(commentView(await this.comments.setIgnored(id, ignored, ws)))
+    })
+  }
+
   /** accountIds 为 null 表示不限空间内账号；空数组表示一个都不许碰 */
   private assertAccountsAllowed(key: ApiKey, ids: string[]) {
     if (!key.accountIds) return
@@ -317,6 +377,22 @@ function contentView(c: Content) {
     reviewedAt: c.reviewedAt ?? null,
     createdBy: c.createdBy ?? null,
     createdAt: c.createdAt,
+  }
+}
+
+function commentView(c: CommentWithRefs) {
+  return {
+    id: c.id,
+    accountId: c.accountId,
+    accountName: c.account?.displayName ?? c.account?.username ?? null,
+    platform: c.platform,
+    platformPostId: c.platformPostId,
+    authorName: c.authorName ?? null,
+    message: c.message,
+    postedAt: c.postedAt,
+    repliedAt: c.repliedAt ?? null,
+    ignoredAt: c.ignoredAt ?? null,
+    reply: c.reply ?? null,
   }
 }
 
