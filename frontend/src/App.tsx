@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, hashKey } from '@tanstack/react-query'
 import { Layout } from '@/components/layout/Layout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import LoginPage from '@/pages/auth/LoginPage'
@@ -21,10 +21,21 @@ import UsersPage from '@/pages/users/UsersPage'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
 import { useDocumentTitle } from '@/lib/page-title'
+import { getWorkspaceId } from '@/lib/workspace-id'
+
+/** 这几类数据不属于任何空间，切换时不该跟着失效重取 */
+const GLOBAL_KEYS = new Set(['me', 'users', 'workspaces'])
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+      // 每份缓存都属于某个空间。统一在哈希里带上空间 id，比给几十处 queryKey 挨个补
+      // 更可靠：新加的查询自动被隔离，漏写不会变成 A 空间的数据显示在 B 空间。
+      queryKeyHashFn: (key) =>
+        GLOBAL_KEYS.has(key[0] as string) ? hashKey(key) : hashKey([getWorkspaceId(), ...key]),
+    },
   },
 })
 

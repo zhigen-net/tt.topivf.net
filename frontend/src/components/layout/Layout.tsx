@@ -4,10 +4,12 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Globe, Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { useWorkspaceId } from '@/lib/workspace-id'
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
+  const workspaceId = useWorkspaceId()
 
   // 点完菜单要收起来，否则抽屉一直盖着刚跳过去的页面
   useEffect(() => setMenuOpen(false), [pathname])
@@ -42,8 +44,9 @@ export function Layout() {
           <span className="text-sm font-semibold">SocialHub</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          {/* 按路由做 key：换页面就重置，用户不用刷新也能从崩溃里走出来 */}
-          <ErrorBoundary key={pathname}>
+          {/* 按路由和空间做 key：换页面或换空间就重置。页面大多不订阅 workspace，
+              不重挂的话它们的查询会停在上一个空间的缓存桶上 */}
+          <ErrorBoundary key={`${workspaceId}:${pathname}`}>
             <Outlet />
           </ErrorBoundary>
         </main>
