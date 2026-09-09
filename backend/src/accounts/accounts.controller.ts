@@ -4,6 +4,7 @@ import { AccountsService } from './accounts.service'
 import { CreateAccountDto } from './dto/create-account.dto'
 import { UpdateAccountDto, UpdateStatusDto } from './dto/update-account.dto'
 import { QueryAccountsDto } from './dto/query-accounts.dto'
+import { BulkAccountIdsDto, BulkAccountStatusDto } from './dto/bulk-accounts.dto'
 import { PlatformsService } from '../platforms/platforms.service'
 import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../workspaces/workspace-context'
 
@@ -51,6 +52,18 @@ export class AccountsController {
     @CurrentWorkspace() ws: WorkspaceContext,
   ) {
     return this.svc.updateStatus(id, dto.status, ws.id)
+  }
+
+  @Post('bulk-status')
+  @MinWorkspaceRole('member')
+  bulkStatus(@Body() dto: BulkAccountStatusDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.bulkUpdateStatus(dto.ids, dto.status, ws.id)
+  }
+
+  @Post('bulk-delete')
+  @MinWorkspaceRole('manager')
+  bulkRemove(@Body() dto: BulkAccountIdsDto, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.bulkRemove(dto.ids, ws.id)
   }
 
   @Post(':id/sync')

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository, FindOptionsWhere, ILike } from 'typeorm'
+import { Repository, FindOptionsWhere, ILike, In } from 'typeorm'
 import { Account, Platform, AccountStatus } from './account.entity'
 import { CreateAccountDto } from './dto/create-account.dto'
 import { UpdateAccountDto } from './dto/update-account.dto'
@@ -114,6 +114,25 @@ export class AccountsService {
     await this.findOne(id, workspaceId)
     await this.repo.update(id, { status })
     return this.findOne(id, workspaceId)
+  }
+
+  async bulkUpdateStatus(ids: string[], status: AccountStatus, workspaceId: string) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId })
+    if (items.length) await this.repo.update(items.map((a) => a.id), { status })
+    return { updated: items.length, skipped: ids.length - items.length }
+  }
+
+  async bulkRemove(ids: string[], workspaceId: string) {
+    const items = await this.repo.findBy({ id: In(ids), workspaceId })
+    // 沿用单个删除那道闸：只删已停用的，不替用户把在跑的账号先停掉再删
+    const removable = items.filter((a) => a.status === 'inactive')
+    // remove() 会把实体上的主键抹掉，id 必须先留出来
+    const removedIds = removable.map((a) => a.id)
+    if (removable.length) {
+      await this.repo.remove(removable)
+      await Promise.all(removedIds.map((id) => this.browserManager.closeContext(id)))
+    }
+    return { deleted: removable.length, skipped: ids.length - removable.length }
   }
 
   async updateStats(id: string, stats: Partial<Pick<Account, 'followers' | 'following' | 'postsCount'>>) {

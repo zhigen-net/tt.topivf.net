@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search, Upload, Trash2, Pencil, Send, RefreshCw, ChevronLeft, ChevronRight, Tags, X, FileCheck, CheckCircle2, XCircle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { ContentFormDialog } from '@/components/contents/ContentFormDialog'
@@ -512,27 +513,6 @@ export default function ContentsPage() {
       />
       <PublishRecordsDrawer content={recordsOf} onClose={() => setRecordsOf(null)} />
     </div>
-  )
-}
-
-function Checkbox({ checked, indeterminate, onChange }: {
-  checked: boolean
-  indeterminate?: boolean
-  onChange: () => void
-}) {
-  const ref = useRef<HTMLInputElement>(null)
-  // indeterminate 只能用 JS 设，没有对应的 HTML 属性
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = Boolean(indeterminate)
-  }, [indeterminate])
-  return (
-    <input
-      ref={ref}
-      type="checkbox"
-      checked={checked}
-      onChange={onChange}
-      className="h-4 w-4 rounded align-middle cursor-pointer"
-    />
   )
 }
 

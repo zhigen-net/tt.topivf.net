@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { Check, Copy, Plus, Trash2, Ban } from 'lucide-react'
@@ -38,9 +39,23 @@ const ENDPOINT = `${window.location.origin}/api/v1/mcp`
 export default function McpPage() {
   const qc = useQueryClient()
   const { workspace, can } = useWorkspace()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [createOpen, setCreateOpen] = useState(false)
+  const [presetAccountIds, setPresetAccountIds] = useState<string[]>([])
   const [issued, setIssued] = useState<{ apiKey: ApiKey; token: string } | null>(null)
   const [removing, setRemoving] = useState<ApiKey | null>(null)
+
+  // 账号页带着选中的账号跳过来，直接开抽屉并勾好范围。
+  // 参数用完就从地址栏抹掉，否则关掉抽屉后一刷新它又弹回来
+  useEffect(() => {
+    const raw = searchParams.get('accounts')
+    if (!raw) return
+    setPresetAccountIds(raw.split(',').filter(Boolean))
+    setCreateOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('accounts')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const { data: keys = [], isLoading } = useQuery({
     queryKey: ['api-keys'],
@@ -70,7 +85,7 @@ export default function McpPage() {
           </p>
         </div>
         {can('member') && (
-          <Button className="shrink-0" onClick={() => setCreateOpen(true)}>
+          <Button className="shrink-0" onClick={() => { setPresetAccountIds([]); setCreateOpen(true) }}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">新建服务</span>
           </Button>
@@ -145,6 +160,7 @@ export default function McpPage() {
 
       <CreateKeyDrawer
         open={createOpen}
+        presetAccountIds={presetAccountIds}
         onClose={() => setCreateOpen(false)}
         onIssued={(r) => { setCreateOpen(false); setIssued(r) }}
       />
@@ -169,8 +185,10 @@ export default function McpPage() {
   )
 }
 
-function CreateKeyDrawer({ open, onClose, onIssued }: {
+function CreateKeyDrawer({ open, presetAccountIds, onClose, onIssued }: {
   open: boolean
+  /** 账号页带过来的选中账号；有值就直接落到「指定账号」上 */
+  presetAccountIds?: string[]
   onClose: () => void
   onIssued: (r: { apiKey: ApiKey; token: string }) => void
 }) {
@@ -188,13 +206,25 @@ function CreateKeyDrawer({ open, onClose, onIssued }: {
 
   useEffect(() => {
     if (!open) return
+    const preset = presetAccountIds ?? []
     setName('')
-    setAllAccounts(true)
-    setAccountIds([])
+    setAllAccounts(preset.length === 0)
+    setAccountIds(preset)
+    // 权限范围一律回到只读默认值：账号范围可以替人预设，能不能发布不行
     setScopes(['contents:read', 'accounts:read', 'tasks:read'])
     setExpiresAt('')
     setSearch('')
-  }, [open])
+  }, [open, presetAccountIds])
+
+  // 账号是异步加载的，名字得等它到位才填得出来。只在还空着时填，不覆盖手输的
+  useEffect(() => {
+    if (!open || !presetAccountIds?.length || !accounts.length) return
+    const first = accounts.find((a) => a.id === presetAccountIds[0])
+    if (!first) return
+    setName((prev) => prev || (presetAccountIds.length > 1
+      ? `「${first.displayName}」等 ${presetAccountIds.length} 个账号`
+      : `「${first.displayName}」`))
+  }, [open, presetAccountIds, accounts])
 
   const visibleAccounts = useMemo(() => {
     const q = search.trim().toLowerCase()
