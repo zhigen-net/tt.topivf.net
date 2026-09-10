@@ -225,6 +225,16 @@ export function AccountDetailDrawer({ account, initialMode = 'view', onClose }: 
             )}
           </Section>
 
+          <Section title="更新要求">
+            {account.brief ? (
+              <p className="whitespace-pre-wrap rounded-xl border p-3 text-sm">{account.brief}</p>
+            ) : (
+              <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                还没写。填上之后，圈定了这个账号的 MCP 密钥会把它带进 AI 的工具说明里。
+              </p>
+            )}
+          </Section>
+
           <Section title="配置">
             <div className="rounded-xl border divide-y text-sm">
               <InfoRow label="状态">

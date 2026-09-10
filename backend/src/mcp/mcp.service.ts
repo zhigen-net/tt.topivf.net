@@ -19,6 +19,9 @@ import type { WorkspaceContext } from '../workspaces/workspace-context'
 
 const SERVER_INFO = { name: 'socialhub', version: '1.0.0' }
 
+// 账号一多，拼进描述的要求就会长到稀释掉工具本身的说明，超过就不拼
+const MAX_BRIEFED_ACCOUNTS = 3
+
 type ToolResult = { content: { type: 'text'; text: string }[] }
 
 /** 密钥的空间在签发时就钉死了，工具里的每次查询都要带上它 */
@@ -39,23 +42,40 @@ export class McpService {
     private readonly comments: CommentsService,
   ) {}
 
-  build(ctx: McpContext): McpServer {
+  async build(ctx: McpContext): Promise<McpServer> {
     const server = new McpServer(SERVER_INFO)
     const has = (scope: McpScope) => ctx.key.scopes.includes(scope)
+    const brief = (has('contents:write') || has('comments:write'))
+      ? await this.accountBriefing(ctx)
+      : ''
 
     if (has('assets:read')) this.registerAssetsRead(server, ctx)
     if (has('assets:write')) this.registerAssetsWrite(server, ctx)
     if (has('contents:read')) this.registerContentsRead(server, ctx)
-    if (has('contents:write')) this.registerContentsWrite(server, ctx)
+    if (has('contents:write')) this.registerContentsWrite(server, ctx, brief)
     if (has('contents:review')) this.registerContentsReview(server, ctx)
     if (has('accounts:read')) this.registerAccountsRead(server, ctx)
     if (has('tasks:read')) this.registerTasksRead(server, ctx)
     if (has('tasks:publish')) this.registerTasksPublish(server, ctx)
     if (has('analytics:read')) this.registerAnalyticsRead(server, ctx)
     if (has('comments:read')) this.registerCommentsRead(server, ctx)
-    if (has('comments:write')) this.registerCommentsWrite(server, ctx)
+    if (has('comments:write')) this.registerCommentsWrite(server, ctx, brief)
 
     return server
+  }
+
+  /**
+   * 密钥钉死账号范围时，把这些账号的更新要求拼进写类工具的描述。描述总在上下文里，
+   * 不必指望 agent 主动去查；作品是按平台建的、发布时才绑账号，光有工具查也来不及。
+   */
+  private async accountBriefing({ key, ws }: McpContext): Promise<string> {
+    const ids = key.accountIds
+    if (!ids?.length || ids.length > MAX_BRIEFED_ACCOUNTS) return ''
+    const accounts = await this.accounts.findExistingByIds(ids, ws.id)
+    const briefed = accounts.filter((a) => a.brief?.trim())
+    if (!briefed.length) return ''
+    return '\n\n【以下账号的更新要求，撰写与修改文案时必须遵守】\n'
+      + briefed.map((a) => `- ${a.displayName}（${a.platform} @${a.username}）：${a.brief!.trim()}`).join('\n')
   }
 
   private registerAssetsRead(server: McpServer, { ws }: McpContext) {
@@ -138,10 +158,10 @@ export class McpService {
     }, async ({ id }) => json(contentView(await this.contents.findOne(id, ws.id))))
   }
 
-  private registerContentsWrite(server: McpServer, { ws, user }: McpContext) {
+  private registerContentsWrite(server: McpServer, { ws, user }: McpContext, brief = '') {
     server.registerTool('create_content', {
       title: '创建作品',
-      description: '新建一个作品，创建后处于草稿状态，需要先提交审核、通过后才能发布。',
+      description: '新建一个作品，创建后处于草稿状态，需要先提交审核、通过后才能发布。' + brief,
       inputSchema: {
         title: z.string().max(200),
         type: z.enum(CONTENT_TYPES),
@@ -158,7 +178,7 @@ export class McpService {
 
     server.registerTool('update_content', {
       title: '修改作品',
-      description: '修改作品内容。注意：改动会让已有的审核结论作废、作品退回草稿状态。',
+      description: '修改作品内容。注意：改动会让已有的审核结论作废、作品退回草稿状态。' + brief,
       inputSchema: {
         id: z.string().uuid(),
         title: z.string().max(200).optional(),
@@ -198,7 +218,8 @@ export class McpService {
   private registerAccountsRead(server: McpServer, { ws, key }: McpContext) {
     server.registerTool('list_accounts', {
       title: '查询社交账号',
-      description: '列出这把密钥可操作的社交账号。返回值不含任何登录凭证。',
+      description: '列出这把密钥可操作的社交账号。返回值不含任何登录凭证。'
+        + 'brief 是该账号的更新要求，为该账号撰写文案或回复前必须先读它。',
       inputSchema: {
         platform: z.enum(PLATFORMS).optional(),
         status: z.enum(['active', 'inactive', 'banned', 'warming']).optional(),
@@ -286,11 +307,11 @@ export class McpService {
     })
   }
 
-  private registerCommentsWrite(server: McpServer, { ws, key }: McpContext) {
+  private registerCommentsWrite(server: McpServer, { ws, key }: McpContext, brief = '') {
     server.registerTool('reply_comment', {
       title: '回复评论',
       description: '以账号本人的身份把回复发到平台上。这条回复会立刻对所有人可见且无法撤回，'
-        + '调用前必须先把拟好的文案给人看过并得到确认。',
+        + '调用前必须先把拟好的文案给人看过并得到确认。' + brief,
       inputSchema: {
         id: z.string().uuid().describe('list_comments 返回的评论 id'),
         message: z.string().min(1).max(8000),
@@ -337,6 +358,7 @@ function accountView(a: Account) {
     username: a.username,
     displayName: a.displayName,
     status: a.status,
+    brief: a.brief ?? null,
     followers: a.followers,
     following: a.following,
     postsCount: a.postsCount,

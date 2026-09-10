@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Search, RefreshCw, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight, Power, PowerOff, Plug, X } from 'lucide-react'
+import { Plus, Search, RefreshCw, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight, Power, PowerOff, Plug, X, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -411,7 +411,12 @@ export default function AccountsPage() {
                     <div className="flex items-center gap-2">
                       {avatar(account, 'h-8 w-8')}
                       <div>
-                        <div className="font-medium hover:underline underline-offset-2">{account.displayName}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium hover:underline underline-offset-2">{account.displayName}</span>
+                          {account.brief && (
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" title="已设更新要求" />
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">@{account.username}</div>
                       </div>
                     </div>

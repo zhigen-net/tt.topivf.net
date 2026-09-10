@@ -83,6 +83,12 @@ export class AccountsService {
     return Promise.all(ids.map((id) => this.findOne(id, workspaceId)))
   }
 
+  /** 与 findAllByIds 不同：查不到的 id 直接跳过。给不该因为一个账号被删就整体失败的调用方用 */
+  async findExistingByIds(ids: string[], workspaceId: string) {
+    if (!ids.length) return []
+    return this.repo.findBy({ id: In(ids), workspaceId })
+  }
+
   async create(dto: CreateAccountDto, workspaceId: string) {
     await this.assertProxyInWorkspace(dto.proxyId, workspaceId)
     const account = this.repo.create({ ...dto, workspaceId })

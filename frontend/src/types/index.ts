@@ -64,6 +64,8 @@ export interface Account {
   proxyId?: string
   groupId?: string
   credentialId?: string
+  /** 给 AI 的更新说明/要求，会被拼进 MCP 写类工具的描述 */
+  brief?: string
   /** 平台侧账号 id：Facebook 是 pageId，Instagram 是 igUserId */
   externalId?: string
   credential?: Pick<MetaCredential, 'id' | 'label' | 'status'>

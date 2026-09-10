@@ -26,7 +26,7 @@ export class McpController {
       return
     }
 
-    const server = this.mcp.build({ key: req.apiKey, user: req.user, ws: req.workspace })
+    const server = await this.mcp.build({ key: req.apiKey, user: req.user, ws: req.workspace })
     // 无状态模式：每个请求一套 server/transport，客户端不需要维持会话
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {

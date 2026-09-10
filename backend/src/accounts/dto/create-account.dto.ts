@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import type { Platform } from '../account.entity'
 
@@ -29,6 +29,12 @@ export class CreateAccountDto {
   @IsOptional()
   @IsUUID()
   groupId?: string
+
+  @ApiPropertyOptional({ description: '给 AI 的更新说明/要求，会被拼进 MCP 写类工具的描述里' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  brief?: string
 
   @ApiPropertyOptional()
   @IsOptional()

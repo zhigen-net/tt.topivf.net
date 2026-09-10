@@ -41,6 +41,7 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
   const [avatar, setAvatar] = useState(account.avatar ?? '')
   const [status, setStatus] = useState<AccountStatus>(account.status)
   const [proxyId, setProxyId] = useState(account.proxyId ?? NONE)
+  const [brief, setBrief] = useState(account.brief ?? '')
   const [cookies, setCookies] = useState('')
   const [metaPick, setMetaPick] = useState<MetaPick | null>(null)
 
@@ -56,6 +57,8 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
       avatar: avatar.trim() || undefined,
       status,
       proxyId: proxyId === NONE ? null : proxyId,
+      // 清空要发 null，发 undefined 的话 update 会当没这个字段、原文原封不动留着
+      brief: brief.trim() || null,
       // 后端是整体覆盖 sessionData，没填就别带这个字段，否则会把现有凭证抹掉
       ...(metaPick ? { sessionData: metaPick.sessionData } : {}),
       ...(!metaPick && cookies.trim() ? { sessionData: { cookies: cookies.trim() } } : {}),
@@ -112,6 +115,20 @@ export function AccountEditForm({ account, onCancel, onSaved }: Props) {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>更新要求 <span className="text-muted-foreground">（选填，给 AI 看）</span></Label>
+        <Textarea
+          rows={4}
+          maxLength={2000}
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          placeholder="这个账号发什么、用什么语言和口吻、必带或禁用哪些话题标签、有什么不能碰的话题…"
+        />
+        <p className="text-xs text-muted-foreground">
+          MCP 密钥只圈定了 3 个以内账号时，这段话会直接写进 AI 的工具说明里，写文案和回评论时始终可见。
+        </p>
       </div>
 
       {isMeta && account.credential ? (

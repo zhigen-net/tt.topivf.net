@@ -40,6 +40,10 @@ export class Account {
   @Column({ name: 'group_id', nullable: true })
   groupId?: string
 
+  // 给 AI 看的更新要求；只走 Web 界面改，不开放 MCP 写，否则等于让 agent 重写自己的约束
+  @Column({ type: 'text', nullable: true })
+  brief?: string
+
   @Column({ name: 'credential_id', type: 'uuid', nullable: true })
   credentialId?: string
 
