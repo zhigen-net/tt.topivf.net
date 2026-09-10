@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { BookOpen, KeyRound, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
@@ -34,10 +35,18 @@ export default function CredentialsPage() {
         <p className="min-w-0 max-w-2xl text-sm text-muted-foreground">
           一条令牌可以接入名下所有主页和 Instagram 账号，换令牌时无需逐个账号重新绑定
         </p>
-        <Button className="shrink-0" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          添加凭证
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/workspace/credentials/guide">
+              <BookOpen className="h-4 w-4 mr-1.5" />
+              接入指引
+            </Link>
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            添加凭证
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -49,6 +58,12 @@ export default function CredentialsPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             粘一次商务管理平台的系统用户令牌，就能批量接入名下的主页和 Instagram 账号
           </p>
+          <Link
+            to="/workspace/credentials/guide"
+            className="mt-3 inline-block text-sm font-medium underline underline-offset-4"
+          >
+            不知道令牌怎么拿？看接入指引
+          </Link>
         </div>
       ) : (
         <div className="space-y-3">

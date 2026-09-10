@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import { TOKEN_HINT } from './credential-labels'
-import { errorText } from './AddCredentialDialog'
+import { CredentialError } from './TokenPreflight'
 import type { MetaCredential } from '@/types'
 
 interface RotateResult {
@@ -21,6 +22,7 @@ export function RotateTokenDialog({ credential, onClose }: {
   onClose: () => void
 }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [token, setToken] = useState('')
   const [result, setResult] = useState<RotateResult | null>(null)
 
@@ -81,7 +83,10 @@ export function RotateTokenDialog({ credential, onClose }: {
             </div>
             <p className="text-xs text-muted-foreground">{TOKEN_HINT}</p>
             {rotate.isError && (
-              <p className="text-sm text-destructive">{errorText(rotate.error)}</p>
+              <CredentialError
+                err={rotate.error}
+                onJump={(s) => navigate(`/workspace/credentials/guide?focus=${s}`)}
+              />
             )}
           </div>
         )}

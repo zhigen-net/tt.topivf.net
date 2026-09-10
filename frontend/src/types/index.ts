@@ -95,6 +95,38 @@ export interface MetaCredential {
   accountCount: number
 }
 
+/** 与后端 CredentialErrorCode 一一对应，前端按它把用户送到教程的对应小节 */
+export type CredentialErrorCode =
+  | 'PAGE_TOKEN'
+  | 'SHORT_LIVED'
+  | 'MISSING_SCOPES'
+  | 'NO_PAGES'
+  | 'TOKEN_INVALID'
+  | 'RATE_LIMITED'
+  | 'NO_ENCRYPTION_KEY'
+  | 'GRAPH_ERROR'
+
+export interface CredentialProblem {
+  code: CredentialErrorCode
+  message: string
+}
+
+/** 令牌体检结果，粘贴前的只读预检，不落库 */
+export interface TokenReport {
+  tokenType: string
+  appId: string
+  scopes: string[]
+  missingScopes: string[]
+  requiredScopes: string[]
+  expiresAt: number
+  /** 本系统换不动长期令牌时给出的原因，空串表示能换 */
+  exchangeBlocker: string
+  pageCount: number
+  instagramCount: number
+  pages: Array<{ name: string; followers: number; instagram: string | null }>
+  problems: CredentialProblem[]
+}
+
 export interface CredentialTarget {
   platform: 'facebook' | 'instagram'
   /** facebook 是 pageId，instagram 是 igUserId */

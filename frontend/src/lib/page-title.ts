@@ -12,6 +12,7 @@ const TITLES: [string, string][] = [
   ['/comments', '评论'],
   ['/analytics', '数据分析'],
   ['/tasks', '发布任务'],
+  ['/workspace/credentials/guide', '凭证接入指引'],
   ['/workspace/credentials', '平台凭据'],
   ['/workspace/proxies', '代理管理'],
   ['/workspace', '工作空间'],

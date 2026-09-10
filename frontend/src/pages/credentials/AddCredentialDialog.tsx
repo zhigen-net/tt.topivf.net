@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Stethoscope } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import { TOKEN_HINT } from './credential-labels'
-import type { DiscoveredTarget, MetaCredential } from '@/types'
+import { CredentialGuide, type GuideSectionId } from './CredentialGuide'
+import { CredentialError, TokenPreflightPanel } from './TokenPreflight'
+import type { DiscoveredTarget, MetaCredential, TokenReport } from '@/types'
 import { TargetPicker, useTargetSelection } from './TargetPicker'
 
 interface CreateResult {
@@ -21,6 +23,7 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
   const [label, setLabel] = useState('')
   const [token, setToken] = useState('')
   const [created, setCreated] = useState<CreateResult | null>(null)
+  const [guide, setGuide] = useState<GuideSectionId | 'closed'>('closed')
   const selection = useTargetSelection()
 
   useEffect(() => {
@@ -28,8 +31,16 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
     setLabel('')
     setToken('')
     setCreated(null)
+    setGuide('closed')
     selection.reset()
   }, [open])
+
+  const openGuide = (section: GuideSectionId) => setGuide(section)
+
+  const inspect = useMutation({
+    mutationFn: () => api.post<TokenReport>('/credentials/inspect', { token: token.trim() })
+      .then((r) => r.data),
+  })
 
   const create = useMutation({
     mutationFn: () => api.post<CreateResult>('/credentials', { label: label.trim(), token: token.trim() }),
@@ -59,7 +70,7 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={guide === 'closed' ? 'max-w-lg' : 'max-w-2xl'}>
         <DialogHeader>
           <DialogTitle>{created ? '选择要接入的账号' : '添加授权凭证'}</DialogTitle>
         </DialogHeader>
@@ -79,16 +90,50 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
               <Textarea
                 rows={4}
                 value={token}
-                onChange={(e) => setToken(e.target.value)}
+                onChange={(e) => {
+                  setToken(e.target.value)
+                  // 换了令牌，上一条的体检结论就作废了，留着会误导
+                  inspect.reset()
+                  create.reset()
+                }}
                 placeholder="EAA…"
                 className="font-mono text-xs"
               />
             </div>
             <p className="text-xs text-muted-foreground">{TOKEN_HINT}</p>
-            {create.isError && (
-              <p className="text-sm text-destructive">
-                {errorText(create.error)}
-              </p>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => inspect.mutate()}
+                disabled={token.trim().length < 20 || inspect.isPending}
+              >
+                {inspect.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  : <Stethoscope className="h-3.5 w-3.5 mr-1.5" />}
+                先体检一下
+              </Button>
+              <button
+                type="button"
+                onClick={() => setGuide(guide === 'closed' ? 'choose' : 'closed')}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {guide === 'closed'
+                  ? <ChevronRight className="h-3.5 w-3.5" />
+                  : <ChevronDown className="h-3.5 w-3.5" />}
+                令牌怎么拿？看接入指引
+              </button>
+            </div>
+
+            {inspect.data && <TokenPreflightPanel report={inspect.data} onJump={openGuide} />}
+            {inspect.isError && <CredentialError err={inspect.error} onJump={openGuide} />}
+            {create.isError && <CredentialError err={create.error} onJump={openGuide} />}
+
+            {guide !== 'closed' && (
+              <div className="max-h-80 overflow-y-auto rounded-md border p-3">
+                <CredentialGuide focus={guide === 'choose' ? undefined : guide} />
+              </div>
             )}
           </div>
         ) : (
@@ -122,10 +167,4 @@ export function AddCredentialDialog({ open, onClose }: { open: boolean; onClose:
       </DialogContent>
     </Dialog>
   )
-}
-
-export function errorText(err: unknown): string {
-  const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message
-  if (Array.isArray(message)) return message.join('；')
-  return typeof message === 'string' ? message : '操作失败，请重试'
 }

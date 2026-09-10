@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { CredentialsService } from './credentials.service'
-import { CreateCredentialDto, RotateTokenDto } from './dto/create-credential.dto'
+import { CreateCredentialDto, InspectTokenDto, RotateTokenDto } from './dto/create-credential.dto'
 import { LinkTargetsDto } from './dto/link-targets.dto'
 import { CurrentWorkspace, MinWorkspaceRole, type WorkspaceContext } from '../workspaces/workspace-context'
 
@@ -23,6 +23,13 @@ export class CredentialsController {
   @Post()
   create(@Body() dto: CreateCredentialDto, @CurrentWorkspace() ws: WorkspaceContext) {
     return this.svc.create(dto.label, dto.token, ws.id)
+  }
+
+  // 只读体检，什么都不建，所以是 200 不是 201
+  @Post('inspect')
+  @HttpCode(HttpStatus.OK)
+  inspect(@Body() dto: InspectTokenDto) {
+    return this.svc.inspect(dto.token)
   }
 
   @Post(':id/discover')

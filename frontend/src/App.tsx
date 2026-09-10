@@ -16,6 +16,7 @@ import ProxiesPage from '@/pages/proxies/ProxiesPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import McpPage from '@/pages/mcp/McpPage'
 import CredentialsPage from '@/pages/credentials/CredentialsPage'
+import CredentialGuidePage from '@/pages/credentials/CredentialGuidePage'
 import ProfilePage from '@/pages/profile/ProfilePage'
 import UsersPage from '@/pages/users/UsersPage'
 import { useMe } from '@/lib/auth'
@@ -82,6 +83,7 @@ export default function App() {
                   <Route index element={<WorkspacePage />} />
                   <Route element={<RequireWorkspaceManager />}>
                     <Route path="credentials" element={<CredentialsPage />} />
+                    <Route path="credentials/guide" element={<CredentialGuidePage />} />
                     <Route path="proxies" element={<ProxiesPage />} />
                   </Route>
                 </Route>

@@ -15,3 +15,9 @@ export class RotateTokenDto {
   @Length(20, 1000)
   token: string
 }
+
+export class InspectTokenDto {
+  @IsString()
+  @Length(20, 1000)
+  token: string
+}

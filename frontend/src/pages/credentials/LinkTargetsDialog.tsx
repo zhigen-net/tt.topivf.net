@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { TargetPicker, useTargetSelection } from './TargetPicker'
-import { errorText } from './AddCredentialDialog'
+import { errorText } from './TokenPreflight'
 import type { DiscoveredTarget, MetaCredential } from '@/types'
 
 interface LinkResult {

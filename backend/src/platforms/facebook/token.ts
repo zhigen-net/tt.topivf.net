@@ -1,5 +1,5 @@
-import { BadRequestException } from '@nestjs/common'
 import { graphGet } from './graph-api'
+import { credentialError, MESSAGES } from './credential-errors'
 
 export interface TokenInfo {
   /** USER / SYSTEM_USER / PAGE */
@@ -28,7 +28,7 @@ interface DebugTokenResponse {
 export async function inspectToken(token: string): Promise<TokenInfo> {
   const res = await graphGet<DebugTokenResponse>('/debug_token', { input_token: token }, token)
   const data = res.data
-  if (!data?.is_valid) throw new BadRequestException('令牌无效或已被吊销，请重新生成')
+  if (!data?.is_valid) throw credentialError('TOKEN_INVALID', MESSAGES.tokenInvalid)
 
   return {
     type: data.type ?? 'UNKNOWN',
@@ -54,7 +54,9 @@ export async function exchangeForLongLived(
     client_secret: appSecret,
     fb_exchange_token: token,
   })
-  if (!res.access_token) throw new BadRequestException('换取长期令牌失败：Facebook 没有返回令牌')
+  if (!res.access_token) {
+    throw credentialError('GRAPH_ERROR', '换取长期令牌失败：Facebook 没有返回令牌')
+  }
   return res.access_token
 }
 

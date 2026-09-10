@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { graphGet, GraphError } from './graph-api'
 import { exchangeForLongLived, inspectToken, type TokenInfo } from './token'
+import {
+  credentialError, MESSAGES, toProblem, type CredentialProblem,
+} from './credential-errors'
 
 export interface LinkableInstagram {
   igUserId: string
@@ -58,6 +61,23 @@ export interface ResolvedToken {
   exchanged: boolean
 }
 
+/** 令牌体检结果。给「粘贴前先看看差在哪」用，不落库 */
+export interface TokenReport {
+  tokenType: string
+  appId: string
+  scopes: string[]
+  missingScopes: string[]
+  requiredScopes: string[]
+  /** unix 秒；0 表示永不过期 */
+  expiresAt: number
+  /** 能不能被本系统换成长期令牌；换不动时给出原因 */
+  exchangeBlocker: string
+  pageCount: number
+  instagramCount: number
+  pages: Array<{ name: string; followers: number; instagram: string | null }>
+  problems: CredentialProblem[]
+}
+
 const PAGE_FIELDS = 'id,name,access_token,followers_count,fan_count,picture,tasks'
 const IG_FIELDS =
   'instagram_business_account{id,username,profile_picture_url,followers_count,media_count}'
@@ -72,6 +92,9 @@ const SHORT_LIVED_MAX_MS = 7 * 24 * 60 * 60 * 1000
 const PAGE_SIZE = 100
 // 兜底，避免游标出问题时无限翻页
 const MAX_PAGES = 20
+
+// 体检表只是让用户确认「认得出这些主页」，列全没意义
+const PREVIEW_PAGES = 20
 
 @Injectable()
 export class FacebookService {
@@ -108,6 +131,54 @@ export class FacebookService {
     return { ...upgraded, info }
   }
 
+  /**
+   * 只读体检。除了令牌本身就是废的，其余问题一律记进 problems 而不是抛出去——
+   * 用户需要一次看全自己差在哪，而不是提交一次改一处、来回试错。
+   */
+  async inspect(input: string): Promise<TokenReport> {
+    const info = await friendly(() => inspectToken(input), '校验令牌')
+    const problems: CredentialProblem[] = []
+    const missingScopes = missingScopesOf(info)
+    const blocker = this.exchangeBlocker(info)
+
+    if (info.type === 'PAGE') problems.push({ code: 'PAGE_TOKEN', message: MESSAGES.pageToken })
+    if (missingScopes.length) {
+      problems.push({ code: 'MISSING_SCOPES', message: MESSAGES.missingScopes(missingScopes) })
+    }
+    if (info.type === 'USER' && blocker && isShortLived(info.expiresAt)) {
+      problems.push({ code: 'SHORT_LIVED', message: MESSAGES.shortLived(blocker) })
+    }
+
+    // 主页令牌打 /me/accounts 只会把同一个问题再报一遍，白跑一趟
+    let pages: LinkablePage[] = []
+    if (info.type !== 'PAGE') {
+      try {
+        pages = await this.fetchPages(input)
+      } catch (err) {
+        problems.push(toProblem(err))
+      }
+    }
+
+    return {
+      tokenType: info.type,
+      appId: info.appId,
+      scopes: info.scopes,
+      missingScopes,
+      requiredScopes: [...REQUIRED_SCOPES],
+      expiresAt: info.expiresAt,
+      exchangeBlocker: blocker,
+      pageCount: pages.length,
+      instagramCount: pages.filter((p) => p.instagram).length,
+      // 只投影展示要用的字段：pages 里带着主页令牌，整条回给前端等于把凭证发出去
+      pages: pages.slice(0, PREVIEW_PAGES).map((p) => ({
+        name: p.name,
+        followers: p.followers,
+        instagram: p.instagram?.username ?? null,
+      })),
+      problems,
+    }
+  }
+
   private async ensureLongLived(token: string, info: TokenInfo) {
     const asIs = { token, expiresAt: info.expiresAt, exchanged: false }
 
@@ -119,10 +190,7 @@ export class FacebookService {
     const blocker = this.exchangeBlocker(info)
     if (blocker) {
       if (isShortLived(info.expiresAt)) {
-        throw new BadRequestException(
-          `这是一条短期用户令牌，由它换出的主页凭证一小时后就会失效，而本系统换不了它（${blocker}）。` +
-            '请改用商务管理平台的系统用户令牌，或先在图形 API 工具里换成长期令牌再粘贴。',
-        )
+        throw credentialError('SHORT_LIVED', MESSAGES.shortLived(blocker))
       }
       this.logger.warn(`跳过长期令牌换取：${blocker}`)
       return asIs
@@ -168,9 +236,7 @@ export class FacebookService {
         }
       })
 
-    if (!pages.length) {
-      throw new BadRequestException('该令牌名下没有可发布的主页，请确认已分配主页资产与发布权限')
-    }
+    if (!pages.length) throw credentialError('NO_PAGES', MESSAGES.noPages)
     return pages
   }
 
@@ -216,18 +282,19 @@ export class FacebookService {
 }
 
 function assertUsable(info: TokenInfo) {
-  if (info.type === 'PAGE') {
-    throw new BadRequestException('这是一条主页令牌，请粘贴系统用户令牌或用户令牌')
-  }
+  if (info.type === 'PAGE') throw credentialError('PAGE_TOKEN', MESSAGES.pageToken)
 
-  // debug_token 没给出 scopes 时不做判断：拿不到清单不等于没有权限，
-  // 据此拒绝会把本来能用的令牌挡在门外
-  if (!info.scopes.length) return
-
-  const missing = REQUIRED_SCOPES.filter((s) => !info.scopes.includes(s))
+  const missing = missingScopesOf(info)
   if (missing.length) {
-    throw new BadRequestException(`令牌缺少权限：${missing.join('、')}，请补齐后重新生成`)
+    throw credentialError('MISSING_SCOPES', MESSAGES.missingScopes(missing))
   }
+}
+
+// debug_token 没给出 scopes 时不做判断：拿不到清单不等于没有权限，
+// 据此拒绝会把本来能用的令牌挡在门外
+function missingScopesOf(info: TokenInfo): string[] {
+  if (!info.scopes.length) return []
+  return REQUIRED_SCOPES.filter((s) => !info.scopes.includes(s))
 }
 
 function isShortLived(expiresAt: number): boolean {
@@ -240,11 +307,11 @@ async function friendly<T>(fn: () => Promise<T>, action: string): Promise<T> {
   } catch (err) {
     if (err instanceof BadRequestException) throw err
     if (err instanceof GraphError && err.isAuthError) {
-      throw new BadRequestException('令牌无效或已被吊销，请到商务管理平台重新生成')
+      throw credentialError('TOKEN_INVALID', MESSAGES.tokenInvalid)
     }
     if (err instanceof GraphError && err.isRateLimit) {
-      throw new BadRequestException('Facebook 接口限流，请稍后再试')
+      throw credentialError('RATE_LIMITED', MESSAGES.rateLimited)
     }
-    throw new BadRequestException(`${action}失败: ${err instanceof Error ? err.message : err}`)
+    throw credentialError('GRAPH_ERROR', `${action}失败: ${err instanceof Error ? err.message : err}`)
   }
 }

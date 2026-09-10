@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { In, Repository } from 'typeorm'
 import { MetaCredential, PendingTarget } from './meta-credential.entity'
@@ -7,6 +7,7 @@ import { SecretBox } from '../crypto/secret-box'
 import { FacebookService, type LinkablePage } from '../platforms/facebook/facebook.service'
 import { GraphError } from '../platforms/facebook/graph-api'
 import { inspectToken } from '../platforms/facebook/token'
+import { credentialError, MESSAGES } from '../platforms/facebook/credential-errors'
 import type { LinkTargetDto } from './dto/link-targets.dto'
 
 /** 到期前这么久开始提醒，留出重新生成令牌的时间 */
@@ -39,6 +40,16 @@ export class CredentialsService {
     const credential = await this.repo.findOne({ where: { id, workspaceId } })
     if (!credential) throw new NotFoundException('凭证不存在或不属于当前工作空间')
     return credential
+  }
+
+  /** 令牌体检，不落库。让用户在提交前一次看全所有毛病，而不是逐条撞错误提示 */
+  async inspect(token: string) {
+    const report = await this.facebook.inspect(token)
+    // 服务端没密钥的话，令牌再完美也存不进来，得跟其他问题一起报出去
+    if (!this.secrets.enabled) {
+      report.problems.push({ code: 'NO_ENCRYPTION_KEY', message: MESSAGES.noEncryptionKey })
+    }
+    return report
   }
 
   /** 粘一条令牌，校验、必要时换长期、加密入库 */
@@ -337,9 +348,7 @@ export class CredentialsService {
 
   private assertEncryptionReady() {
     if (!this.secrets.enabled) {
-      throw new BadRequestException(
-        '未配置 CREDENTIAL_ENCRYPTION_KEY，无法托管令牌。请先在服务端配置该密钥并重启。',
-      )
+      throw credentialError('NO_ENCRYPTION_KEY', MESSAGES.noEncryptionKey)
     }
   }
 }

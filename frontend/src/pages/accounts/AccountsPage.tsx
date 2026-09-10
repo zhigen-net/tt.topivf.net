@@ -414,7 +414,9 @@ export default function AccountsPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-medium hover:underline underline-offset-2">{account.displayName}</span>
                           {account.brief && (
-                            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" title="已设更新要求" />
+                            <span title="已设更新要求" className="flex">
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            </span>
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground">@{account.username}</div>
