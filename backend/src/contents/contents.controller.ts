@@ -27,6 +27,12 @@ export class ContentsController {
     return this.svc.findOne(id, ws.id)
   }
 
+  // 签名直链十分钟就过期，跟列表一起发的话用户点开时多半已经失效，只能点开时现取
+  @Get(':id/preview')
+  preview(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.preview(id, ws.id)
+  }
+
   @Post()
   @MinWorkspaceRole('member')
   create(@Body() dto: CreateContentDto, @CurrentWorkspace() ws: WorkspaceContext, @CurrentUser() me: User) {

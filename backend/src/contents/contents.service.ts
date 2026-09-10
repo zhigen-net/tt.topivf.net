@@ -22,6 +22,15 @@ export interface PublishSummary {
 
 export type ContentWithPublish = Content & PublishSummary
 
+export interface ContentPreview {
+  /** 播放/显示用的直链，外链作品直接就是原地址 */
+  mediaUrl: string | null
+  /** 决定前端渲染 <video> 还是 <img>，外链拿不到素材记录时按作品类型猜 */
+  mediaKind: 'video' | 'image' | null
+  /** 视频的封面帧，同时也是 <video> 的 poster */
+  coverUrl: string | null
+}
+
 @Injectable()
 export class ContentsService {
   constructor(
@@ -74,6 +83,26 @@ export class ContentsService {
     const item = await this.repo.findOneBy({ id, workspaceId })
     if (!item) throw new NotFoundException(`Content ${id} not found`)
     return item
+  }
+
+  /** 点开预览时才签的媒体直链。签名 10 分钟过期，提前跟列表一起发就白发了 */
+  async preview(id: string, workspaceId: string): Promise<ContentPreview> {
+    const c = await this.findOne(id, workspaceId)
+
+    const asset = c.assetId ? await this.assets.findOneBy({ id: c.assetId, workspaceId }) : null
+    const signed = await this.assetsService.signedUrlsFor(
+      [c.assetId, c.thumbnailAssetId].filter((x): x is string => !!x),
+    )
+
+    const thumbs = c.thumbnailAssetId ? signed : new Map<string, string>()
+    // 视频作品没单独设封面时不该退回配图本身，那是一段视频，当 poster 是裂图
+    const covers = asset?.type === 'image' ? signed : new Map<string, string>()
+
+    return {
+      mediaUrl: (c.assetId ? signed.get(c.assetId) : c.fileUrl) ?? null,
+      mediaKind: asset?.type ?? (c.fileUrl ? kindOf(c.type) : null),
+      coverUrl: coverUrlOf(c, thumbs, covers) ?? null,
+    }
   }
 
   async create(dto: CreateContentDto, ws: WorkspaceContext, actor: User) {
@@ -243,6 +272,11 @@ const CLEAR_REVIEW = {
   reviewedAt: null,
   reviewedBy: null,
 } as unknown as Partial<Content>
+
+/** 外链作品没有素材记录可查类型，只能按作品类型推：除了「图片」都是视频 */
+function kindOf(type: Content['type']): 'video' | 'image' {
+  return type === 'image' ? 'image' : 'video'
+}
 
 function emptySummary(): PublishSummary {
   return { taskCount: 0, doneCount: 0, failedCount: 0, lastPublishedAt: null }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, Upload, Trash2, Pencil, Send, RefreshCw, ChevronLeft, ChevronRight, Tags, X, FileCheck, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Search, Upload, Trash2, Pencil, Send, RefreshCw, ChevronLeft, ChevronRight, Tags, X, FileCheck, CheckCircle2, XCircle, Eye } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { PublishContentDialog } from '@/components/contents/PublishContentDialog
 import { BulkPlatformsDialog } from '@/components/contents/BulkPlatformsDialog'
 import { RejectContentDialog } from '@/components/contents/RejectContentDialog'
 import { PublishRecordsDrawer } from '@/components/contents/PublishRecordsDrawer'
+import { ContentPreviewDialog } from '@/components/contents/ContentPreviewDialog'
 import { allContentTypes, allPlatforms, contentTypeLabel, platformLabel, allReviewStatuses, reviewStatusLabel, reviewStatusClass } from '@/components/contents/constants'
 import { api } from '@/lib/api'
 import { useMe } from '@/lib/auth'
@@ -47,6 +48,7 @@ export default function ContentsPage() {
   const [confirmDelete, setConfirmDelete] = useState<Content[] | null>(null)
   const [rejecting, setRejecting] = useState<Content[]>([])
   const [recordsOf, setRecordsOf] = useState<Content | null>(null)
+  const [previewing, setPreviewing] = useState<Content | null>(null)
 
   // 每敲一个字就打一次接口没必要，停下来再查
   useEffect(() => {
@@ -142,6 +144,9 @@ export default function ContentsPage() {
   function rowActions(item: Content) {
     return (
       <>
+        <IconAction title="预览" onClick={() => setPreviewing(item)}>
+          <Eye className="h-3.5 w-3.5" />
+        </IconAction>
         {canEdit(item) && (item.reviewStatus === 'draft' || item.reviewStatus === 'rejected') && (
           <IconAction
             title="提交审核"
@@ -363,19 +368,25 @@ export default function ContentsPage() {
             >
               <div className="flex gap-3">
                 <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleOne(item.id)} />
-                <div className="h-10 w-16 shrink-0 rounded bg-muted overflow-hidden">
-                  {item.coverUrl ? (
-                    <img src={item.coverUrl} alt="" className="object-cover w-full h-full" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                      {contentTypeLabel[item.type]}
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm break-words">{item.title}</p>
-                  {item.caption && <p className="text-xs text-muted-foreground line-clamp-2">{item.caption}</p>}
-                </div>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 gap-3 text-left"
+                  onClick={() => setPreviewing(item)}
+                >
+                  <div className="h-10 w-16 shrink-0 rounded bg-muted overflow-hidden">
+                    {item.coverUrl ? (
+                      <img src={item.coverUrl} alt="" className="object-cover w-full h-full" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                        {contentTypeLabel[item.type]}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm break-words">{item.title}</p>
+                    {item.caption && <p className="text-xs text-muted-foreground line-clamp-2">{item.caption}</p>}
+                  </div>
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
@@ -411,7 +422,7 @@ export default function ContentsPage() {
                 <th className="w-28 px-3 py-2.5 text-left font-medium">审核状态</th>
                 <th className="w-44 px-3 py-2.5 text-left font-medium">发布状态</th>
                 <th className="w-36 px-3 py-2.5 text-left font-medium">创建时间</th>
-                <th className="w-40 px-3 py-2.5" />
+                <th className="w-48 px-3 py-2.5" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -424,7 +435,12 @@ export default function ContentsPage() {
                     <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleOne(item.id)} />
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      className="flex items-center gap-3 min-w-0 text-left"
+                      title="点击预览"
+                      onClick={() => setPreviewing(item)}
+                    >
                       <div className="h-9 w-14 shrink-0 rounded bg-muted overflow-hidden">
                         {item.coverUrl ? (
                           <img src={item.coverUrl} alt="" className="object-cover w-full h-full" />
@@ -435,12 +451,12 @@ export default function ContentsPage() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-medium truncate max-w-[22rem]" title={item.title}>{item.title}</p>
+                        <p className="font-medium truncate max-w-[22rem] group-hover:underline">{item.title}</p>
                         {item.caption && (
                           <p className="text-xs text-muted-foreground truncate max-w-[22rem]">{item.caption}</p>
                         )}
                       </div>
-                    </div>
+                    </button>
                   </td>
                   <td className="px-3 py-2">
                     <Badge variant="secondary" className="text-xs">{contentTypeLabel[item.type]}</Badge>
@@ -512,6 +528,9 @@ export default function ContentsPage() {
         onDone={() => { setRejecting([]); setSelectedIds([]) }}
       />
       <PublishRecordsDrawer content={recordsOf} onClose={() => setRecordsOf(null)} />
+      {previewing && (
+        <ContentPreviewDialog content={previewing} onClose={() => setPreviewing(null)} />
+      )}
     </div>
   )
 }

@@ -191,6 +191,13 @@ export interface Content {
   lastPublishedAt: string | null
 }
 
+/** GET /contents/:id/preview 的返回。签名直链十分钟过期，所以点开预览时才取 */
+export interface ContentPreviewMedia {
+  mediaUrl: string | null
+  mediaKind: 'video' | 'image' | null
+  coverUrl: string | null
+}
+
 /** 任务接口回填的账号信息，账号被删掉后就不在这个数组里了 */
 export interface TaskAccount {
   id: string
