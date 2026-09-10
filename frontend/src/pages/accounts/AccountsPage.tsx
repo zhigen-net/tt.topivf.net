@@ -326,7 +326,7 @@ export default function AccountsPage() {
         </p>
       ) : (
         <div className="space-y-2 md:hidden">
-          <label className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 px-3 text-xs text-muted-foreground">
             <Checkbox checked={allChecked} indeterminate={selected.length > 0 && !allChecked} onChange={toggleAll} />
             全选本页
           </label>
@@ -370,7 +370,7 @@ export default function AccountsPage() {
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50">
             <tr>
-              <th className="w-10 pl-4 py-3 text-left">
+              <th className="w-12 px-4 py-3 text-left">
                 <Checkbox checked={allChecked} indeterminate={selected.length > 0 && !allChecked} onChange={toggleAll} />
               </th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">账号</th>
@@ -400,7 +400,7 @@ export default function AccountsPage() {
                   key={account.id}
                   className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${selectedIds.includes(account.id) ? 'bg-primary/5' : ''}`}
                 >
-                  <td className="w-10 pl-4 py-3">
+                  <td className="w-12 px-4 py-3">
                     <Checkbox checked={selectedIds.includes(account.id)} onChange={() => toggleOne(account.id)} />
                   </td>
                   {/* 点击账号信息区域打开详情 */}
