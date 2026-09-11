@@ -7,8 +7,22 @@ import { AddMemberDto, CreateWorkspaceDto, UpdateMemberDto } from './dto/workspa
 import { UsersService } from '../users/users.service'
 import type { User } from '../users/user.entity'
 
-/** 归属列叫 workspace_id 的表，删空间前要确认它们是空的 */
-const OWNED_TABLES = ['accounts', 'proxies', 'contents', 'publish_tasks', 'assets'] as const
+/**
+ * 归属列叫 workspace_id 的表，删空间前要确认它们是空的。这些表都没有指向 workspaces
+ * 的外键，少列一张就会在删空间后留下一批挂着空 id 的孤儿行，没有任何接口再查得到。
+ * api_keys 单独拦（见 countLiveApiKeys），workspace_members 不拦——成员关系本就该
+ * 跟着空间一起消失。
+ */
+const OWNED_TABLES = {
+  accounts: '账号',
+  proxies: '代理',
+  contents: '作品',
+  publish_tasks: '发布任务',
+  assets: '素材',
+  comments: '评论',
+  posts: '发布记录',
+  meta_credentials: '授权凭证',
+} as const
 
 @Injectable()
 export class WorkspacesService {
@@ -72,17 +86,36 @@ export class WorkspacesService {
   async remove(id: string) {
     await this.findOne(id)
     const blockers: string[] = []
-    for (const table of OWNED_TABLES) {
+    for (const [table, label] of Object.entries(OWNED_TABLES)) {
       const [{ count }] = await this.ds.query<{ count: string }[]>(
         `SELECT COUNT(*)::text AS count FROM ${table} WHERE workspace_id = $1`,
         [id],
       )
-      if (Number(count) > 0) blockers.push(`${table}(${count})`)
+      if (Number(count) > 0) blockers.push(`${label} ${count} 条`)
     }
+
+    const keys = await this.countLiveApiKeys(id)
+    if (keys > 0) blockers.push(`还能用的 MCP 密钥 ${keys} 个`)
+
     if (blockers.length) {
-      throw new BadRequestException(`空间下还有数据，请先迁走或删除：${blockers.join('、')}`)
+      throw new BadRequestException(`空间下还有数据，请先迁走、删除或吊销：${blockers.join('、')}`)
     }
     await this.repo.delete(id)
+  }
+
+  /**
+   * api_keys 有 ON DELETE CASCADE，删空间不会留孤儿行，但会静默废掉对方还在跑的
+   * 自动化，所以照样拦一道。判活的口径跟 ApiKeysService.validate 一致；已吊销和已
+   * 过期的不算——那是查得到的历史记录，不该逼人先销毁它才能删空间。
+   */
+  private async countLiveApiKeys(workspaceId: string) {
+    const [{ count }] = await this.ds.query<{ count: string }[]>(
+      `SELECT COUNT(*)::text AS count FROM api_keys
+       WHERE workspace_id = $1 AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at >= now())`,
+      [workspaceId],
+    )
+    return Number(count)
   }
 
   listMembers(workspaceId: string) {
