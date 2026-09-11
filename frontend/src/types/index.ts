@@ -12,6 +12,7 @@ export interface Workspace {
   name: string
   /** 当前登录用户在这个空间里的角色 */
   role: WorkspaceRole
+  memberCount: number
   createdAt: string
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Building2, Plus, Trash2, UserPlus } from 'lucide-react'
+import { Trash2, UserPlus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,6 @@ const ROLE_HINTS: Record<WorkspaceRole, string> = {
 }
 
 export default function WorkspacePage() {
-  const { isAdmin } = useMe()
   const { workspace, isManager } = useWorkspace()
 
   // 加载中和「没有空间」都由外层 WorkspaceLayout 处理了
@@ -32,7 +31,6 @@ export default function WorkspacePage() {
     <div className="space-y-4">
       {isManager && <RenameCard workspace={workspace} />}
       <MembersCard workspace={workspace} canManage={isManager} />
-      {isAdmin && <AllWorkspacesCard currentId={workspace.id} />}
     </div>
   )
 }
@@ -259,102 +257,6 @@ function AddMemberDialog({ workspace, onClose, onAdded }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function AllWorkspacesCard({ currentId }: { currentId: string }) {
-  const qc = useQueryClient()
-  const { workspaces, switchTo } = useWorkspace()
-  const [creating, setCreating] = useState(false)
-  const [name, setName] = useState('')
-  const [removing, setRemoving] = useState<Workspace | null>(null)
-
-  const create = useMutation({
-    mutationFn: () => api.post('/workspaces', { name: name.trim() }),
-    onSuccess: () => {
-      setCreating(false)
-      setName('')
-      qc.invalidateQueries({ queryKey: ['workspaces'] })
-    },
-  })
-
-  const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/workspaces/${id}`),
-    onSuccess: () => {
-      setRemoving(null)
-      qc.invalidateQueries({ queryKey: ['workspaces'] })
-    },
-  })
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-base">全部工作空间</CardTitle>
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">新建空间</span>
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {workspaces.map((w) => (
-          <div key={w.id} className="flex items-center justify-between gap-2 rounded-lg border p-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate text-sm">{w.name}</span>
-              {w.id === currentId && <Badge variant="secondary" className="shrink-0">当前</Badge>}
-            </div>
-            <div className="flex shrink-0 gap-1">
-              {w.id !== currentId && (
-                <Button variant="outline" size="sm" onClick={() => switchTo(w.id)}>切换</Button>
-              )}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRemoving(w)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          </div>
-        ))}
-        {remove.isError && <p className="text-sm text-destructive">{errorText(remove.error)}</p>}
-      </CardContent>
-
-      {creating && (
-        <Dialog open onOpenChange={(o) => !o && setCreating(false)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>新建工作空间</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>空间名称</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={64} />
-              </div>
-              <p className="text-xs text-muted-foreground">建好后你自动成为该空间的管理员。</p>
-              {create.isError && <p className="text-sm text-destructive">{errorText(create.error)}</p>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCreating(false)}>取消</Button>
-              <Button onClick={() => create.mutate()} disabled={!name.trim() || create.isPending}>
-                {create.isPending ? '创建中…' : '创建'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {removing && (
-        <Dialog open onOpenChange={(o) => !o && setRemoving(null)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>删除工作空间</DialogTitle></DialogHeader>
-            <p className="text-sm">
-              删除「{removing.name}」。空间下还有账号、作品等数据时会被拒绝，需要先清空。
-            </p>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setRemoving(null)}>取消</Button>
-              <Button variant="destructive" onClick={() => remove.mutate(removing.id)} disabled={remove.isPending}>
-                {remove.isPending ? '删除中…' : '确定删除'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </Card>
   )
 }
 

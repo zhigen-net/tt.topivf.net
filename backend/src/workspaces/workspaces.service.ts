@@ -41,14 +41,29 @@ export class WorkspacesService {
     return this.repo.find({ where: { id: In(rows.map((m) => m.workspaceId)) }, order: { createdAt: 'ASC' } })
   }
 
-  /** 列表里直接带上「我在这个空间是什么角色」，前端切换器不用再逐个问 */
+  /** 列表里直接带上「我在这个空间是什么角色」和成员数，前端切换器不用再逐个问 */
   async findVisibleWithRole(actor: User) {
     const list = await this.findVisible(actor)
-    if (actor.role === 'admin') return list.map((w) => ({ ...w, role: 'manager' as WorkspaceRole }))
+    if (!list.length) return []
+
+    const counts = await this.countMembers(list.map((w) => w.id))
+    if (actor.role === 'admin') {
+      return list.map((w) => ({ ...w, role: 'manager' as WorkspaceRole, memberCount: counts.get(w.id) ?? 0 }))
+    }
     const roles = new Map(
       (await this.members.find({ where: { userId: actor.id } })).map((m) => [m.workspaceId, m.role]),
     )
-    return list.map((w) => ({ ...w, role: roles.get(w.id)! }))
+    return list.map((w) => ({ ...w, role: roles.get(w.id)!, memberCount: counts.get(w.id) ?? 0 }))
+  }
+
+  private async countMembers(ids: string[]) {
+    const rows = await this.members.createQueryBuilder('m')
+      .select('m.workspaceId', 'id')
+      .addSelect('COUNT(*)', 'n')
+      .where('m.workspaceId IN (:...ids)', { ids })
+      .groupBy('m.workspaceId')
+      .getRawMany<{ id: string, n: string }>()
+    return new Map(rows.map((r) => [r.id, Number(r.n)]))
   }
 
   /**

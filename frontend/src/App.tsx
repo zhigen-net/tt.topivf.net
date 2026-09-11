@@ -11,6 +11,7 @@ import CommentsPage from '@/pages/comments/CommentsPage'
 import AnalyticsPage from '@/pages/analytics/AnalyticsPage'
 import WorkspacePage from '@/pages/workspace/WorkspacePage'
 import { WorkspaceLayout } from '@/pages/workspace/WorkspaceLayout'
+import WorkspacesPage from '@/pages/workspaces/WorkspacesPage'
 import TasksPage from '@/pages/tasks/TasksPage'
 import ProxiesPage from '@/pages/proxies/ProxiesPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
@@ -94,6 +95,7 @@ export default function App() {
                 <Route path="/mcp" element={<McpPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route element={<RequireAdmin />}>
+                  <Route path="/workspaces" element={<WorkspacesPage />} />
                   <Route path="/users" element={<UsersPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>

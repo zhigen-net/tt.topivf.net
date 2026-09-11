@@ -16,6 +16,7 @@ const TITLES: [string, string][] = [
   ['/workspace/credentials', '平台凭据'],
   ['/workspace/proxies', '代理管理'],
   ['/workspace', '工作空间'],
+  ['/workspaces', '空间管理'],
   ['/mcp', 'MCP 服务'],
   ['/profile', '个人资料'],
   ['/users', '用户管理'],

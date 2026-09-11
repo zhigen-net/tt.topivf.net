@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Users, FileVideo, Settings, Globe, LogOut,
-  LayoutDashboard, ShieldCheck, Building2, Images, Plug, ChevronRight, TrendingUp,
+  LayoutDashboard, ShieldCheck, Building2, Boxes, Images, Plug, ChevronRight, TrendingUp,
   MessageSquare,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -21,6 +21,7 @@ const nav = [
   { to: '/analytics', icon: TrendingUp, label: '数据分析' },
   { to: '/mcp', icon: Plug, label: 'MCP 服务' },
   { to: '/workspace', icon: Building2, label: '工作空间' },
+  { to: '/workspaces', icon: Boxes, label: '空间管理', adminOnly: true },
   { to: '/users', icon: ShieldCheck, label: '用户管理', adminOnly: true },
   { to: '/settings', icon: Settings, label: '系统设置', adminOnly: true },
 ]
