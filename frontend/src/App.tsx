@@ -26,7 +26,7 @@ import { useDocumentTitle } from '@/lib/page-title'
 import { getWorkspaceId } from '@/lib/workspace-id'
 
 /** 这几类数据不属于任何空间，切换时不该跟着失效重取 */
-const GLOBAL_KEYS = new Set(['me', 'users', 'workspaces'])
+const GLOBAL_KEYS = new Set(['me', 'users', 'workspaces', 'site-settings'])
 
 const queryClient = new QueryClient({
   defaultOptions: {

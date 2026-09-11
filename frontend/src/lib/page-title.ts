@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-
-export const APP_NAME = 'SocialHub'
+import { useSiteName } from './site'
 
 // 越具体的前缀写在越前面，匹配时取第一个命中的
 const TITLES: [string, string][] = [
@@ -23,16 +22,17 @@ const TITLES: [string, string][] = [
   ['/settings', '系统设置'],
 ]
 
-export function titleFor(pathname: string) {
-  if (pathname === '/') return `概览 · ${APP_NAME}`
+export function titleFor(pathname: string, siteName: string) {
+  if (pathname === '/') return `概览 · ${siteName}`
   const hit = TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))
-  return hit ? `${hit[1]} · ${APP_NAME}` : APP_NAME
+  return hit ? `${hit[1]} · ${siteName}` : siteName
 }
 
 /** 挂在路由树顶上，换页就改标签页标题 */
 export function useDocumentTitle() {
   const { pathname } = useLocation()
+  const siteName = useSiteName()
   useEffect(() => {
-    document.title = titleFor(pathname)
-  }, [pathname])
+    document.title = titleFor(pathname, siteName)
+  }, [pathname, siteName])
 }

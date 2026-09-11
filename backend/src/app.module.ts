@@ -18,6 +18,7 @@ import { PlatformsModule } from './platforms/platforms.module'
 import { CryptoModule } from './crypto/crypto.module'
 import { CredentialsModule } from './credentials/credentials.module'
 import { McpModule } from './mcp/mcp.module'
+import { SettingsModule } from './settings/settings.module'
 import appConfig from './config/app.config'
 
 @Module({
@@ -66,6 +67,7 @@ import appConfig from './config/app.config'
     CommentsModule,
     DashboardModule,
     McpModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

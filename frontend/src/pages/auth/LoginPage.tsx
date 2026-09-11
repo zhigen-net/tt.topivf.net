@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
+import { useSiteName } from '@/lib/site'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const siteName = useSiteName()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -43,7 +45,7 @@ export default function LoginPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Globe className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold">SocialHub</h1>
+          <h1 className="text-2xl font-bold">{siteName}</h1>
           <p className="text-sm text-muted-foreground">登录到你的账号</p>
         </div>
 

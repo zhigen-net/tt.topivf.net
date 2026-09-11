@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useMe } from '@/lib/auth'
 import { useWorkspace } from '@/lib/workspace'
+import { useSiteName } from '@/lib/site'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
 
@@ -30,6 +31,7 @@ export function Sidebar() {
   const navigate = useNavigate()
   const { me, isAdmin } = useMe()
   const { workspace } = useWorkspace()
+  const siteName = useSiteName()
 
   // 待处理评论的角标。评论是别人发来的，不刷新就看不到，所以这里自己轮询
   const { data: pending } = useQuery({
@@ -47,7 +49,7 @@ export function Sidebar() {
     <aside className="flex h-dvh w-60 flex-col border-r bg-background">
       <div className="flex h-14 items-center gap-2 border-b px-4">
         <Globe className="h-5 w-5 text-primary" />
-        <span className="font-semibold text-sm">SocialHub</span>
+        <span className="truncate font-semibold text-sm">{siteName}</span>
       </div>
       <div className="border-b p-3">
         <WorkspaceSwitcher />

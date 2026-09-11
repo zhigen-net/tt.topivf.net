@@ -1,7 +1,14 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { KeyRound, Clock } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
+import { KeyRound, Clock, Type } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { api } from '@/lib/api'
+import { useSiteName } from '@/lib/site'
 
 export default function SettingsPage() {
   return (
@@ -14,6 +21,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4 max-w-2xl">
+        <SiteNameCard />
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -58,6 +67,59 @@ export default function SettingsPage() {
       </div>
     </div>
   )
+}
+
+function SiteNameCard() {
+  const qc = useQueryClient()
+  const siteName = useSiteName()
+  const [name, setName] = useState(siteName)
+
+  // 首次渲染时查询还没回来，拿到的是默认值，得等真值到了再同步一次
+  useEffect(() => setName(siteName), [siteName])
+
+  const save = useMutation({
+    mutationFn: () => api.patch('/settings', { siteName: name.trim() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['site-settings'] }),
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Type className="h-4 w-4 text-muted-foreground" />
+          系统名称
+        </CardTitle>
+        <CardDescription>显示在登录页、侧边栏和浏览器标签上，全站共用</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-end gap-3">
+        <div className="min-w-52 flex-1 space-y-1.5">
+          <Label htmlFor="site-name">名称</Label>
+          <Input
+            id="site-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={32}
+          />
+        </div>
+        <Button
+          onClick={() => save.mutate()}
+          disabled={!name.trim() || name.trim() === siteName || save.isPending}
+        >
+          {save.isPending ? '保存中…' : '保存'}
+        </Button>
+        {save.isError && <p className="w-full text-sm text-destructive">{errorText(save.error)}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function errorText(err: unknown): string {
+  if (isAxiosError(err)) {
+    const msg = (err.response?.data as { message?: string | string[] } | undefined)?.message
+    if (Array.isArray(msg)) return msg.join('；')
+    if (msg) return msg
+  }
+  return '保存失败，请重试。'
 }
 
 function localZoneName() {

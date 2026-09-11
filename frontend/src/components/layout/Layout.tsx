@@ -5,11 +5,13 @@ import { Globe, Menu } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useWorkspaceId } from '@/lib/workspace-id'
+import { useSiteName } from '@/lib/site'
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
   const workspaceId = useWorkspaceId()
+  const siteName = useSiteName()
 
   // 点完菜单要收起来，否则抽屉一直盖着刚跳过去的页面
   useEffect(() => setMenuOpen(false), [pathname])
@@ -41,7 +43,7 @@ export function Layout() {
             <Menu className="h-5 w-5" />
           </button>
           <Globe className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold">SocialHub</span>
+          <span className="truncate text-sm font-semibold">{siteName}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
           {/* 按路由和空间做 key：换页面或换空间就重置。页面大多不订阅 workspace，
