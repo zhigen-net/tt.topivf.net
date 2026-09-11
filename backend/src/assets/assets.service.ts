@@ -41,6 +41,34 @@ const BROWSER_PREFIX = '/api'
 /** 分享链接的默认时长。够把链接发出去、对方过几天想起来还能打开。上限在 ShareAssetDto 里管 */
 const SHARE_TTL_DAYS_DEFAULT = 30
 
+const REFERENCED_SUBQUERY
+  = '(SELECT 1 FROM contents c WHERE c.asset_id = a.id OR c.thumbnail_asset_id = a.id)'
+
+function publishedSubquery(extra = '') {
+  return `(
+    SELECT 1 FROM contents c
+    JOIN posts p ON p.content_id = c.id
+    WHERE (c.asset_id = a.id OR c.thumbnail_asset_id = a.id)${extra}
+  )`
+}
+
+/** 搜索词按空白切开，顺手挡掉全是空格的输入。最多认 6 个词，再多也只是把 SQL 撑长 */
+function searchWords(search?: string) {
+  return (search ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 6)
+}
+
+/** 前端传的是 YYYY-MM-DD，按服务器时区落到当天零点 */
+function dayStart(date: string) {
+  return new Date(`${date.slice(0, 10)}T00:00:00`)
+}
+
+/** 上界是闭区间，所以往后推一天再用 < 比，省得纠结 23:59:59.999 */
+function dayAfter(date: string) {
+  const d = dayStart(date)
+  d.setDate(d.getDate() + 1)
+  return d
+}
+
 export type AssetView = ReturnType<AssetsService['view']>
 
 @Injectable()
@@ -146,14 +174,40 @@ export class AssetsService {
 
     const qb = this.repo.createQueryBuilder('a')
       .where('a.workspaceId = :workspaceId', { workspaceId: ws.id })
+
     if (query.type) qb.andWhere('a.type = :type', { type: query.type })
-    if (query.search) qb.andWhere('a.filename ILIKE :search', { search: `%${query.search}%` })
-    if (query.unreferenced === 'true') {
-      qb.andWhere('NOT EXISTS (SELECT 1 FROM contents c WHERE c.asset_id = a.id OR c.thumbnail_asset_id = a.id)')
+    if (query.uploadedById) qb.andWhere('a.uploadedById = :uploadedById', { uploadedById: query.uploadedById })
+    if (query.from) qb.andWhere('a.createdAt >= :from', { from: dayStart(query.from) })
+    if (query.to) qb.andWhere('a.createdAt < :to', { to: dayAfter(query.to) })
+
+    // 文件名里常见 "20260901_产品A_竖版.mp4" 这种拼法，搜 "产品A 竖版" 得能命中，
+    // 所以按空白切词后每个词都要 ILIKE 上，顺序无所谓
+    for (const [i, word] of searchWords(query.search).entries()) {
+      qb.andWhere(`a.filename ILIKE :kw${i}`, { [`kw${i}`]: `%${word}%` })
+    }
+
+    if (query.referenced === 'true') qb.andWhere(`EXISTS ${REFERENCED_SUBQUERY}`)
+    if (query.referenced === 'false') qb.andWhere(`NOT EXISTS ${REFERENCED_SUBQUERY}`)
+
+    // 发布过 = 引用了这条素材的作品里，有任意一条真的落到了 posts 上。
+    // 素材当封面（thumbnail_asset_id）也算发布过，作品列表里它确实露过脸
+    if (query.published === 'true') qb.andWhere(`EXISTS ${publishedSubquery()}`)
+    if (query.published === 'false') qb.andWhere(`NOT EXISTS ${publishedSubquery()}`)
+
+    // 按账号/平台筛只有「发布过」这一种解释，所以单独叠一个 EXISTS。
+    // 和 published=false 一起传会筛出空集，那是这组条件本来的含义，不替用户改写
+    const byAccount = query.accountIds?.length ? ' AND p.account_id = ANY(:accountIds)' : ''
+    const byPlatform = query.platform ? ' AND p.platform = :platform' : ''
+    if (byAccount || byPlatform) {
+      qb.andWhere(`EXISTS ${publishedSubquery(byAccount + byPlatform)}`)
+      if (byAccount) qb.setParameter('accountIds', query.accountIds)
+      if (byPlatform) qb.setParameter('platform', query.platform)
     }
 
     const [data, total] = await qb
-      .orderBy('a.createdAt', 'DESC')
+      .orderBy(`a.${query.sort ?? 'createdAt'}`, query.order ?? 'DESC')
+      // 按大小/文件名排时会有一堆并列，不加个稳定的次序翻页会重复或漏条目
+      .addOrderBy('a.id', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount()
@@ -165,6 +219,21 @@ export class AssetsService {
       page,
       totalPages: Math.ceil(total / limit) || 1,
     }
+  }
+
+  /** 筛选面板的上传者下拉。只列这个空间里真的传过东西的人 */
+  async uploaders(ws: WorkspaceContext) {
+    const rows = await this.repo.createQueryBuilder('a')
+      .select('a.uploadedById', 'id')
+      .addSelect('MAX(a.uploadedBy)', 'name')
+      .addSelect('COUNT(*)', 'count')
+      .where('a.workspaceId = :workspaceId', { workspaceId: ws.id })
+      .andWhere('a.uploadedById IS NOT NULL')
+      .groupBy('a.uploadedById')
+      .orderBy('COUNT(*)', 'DESC')
+      .getRawMany<{ id: string, name: string | null, count: string }>()
+
+    return rows.map((r) => ({ id: r.id, name: r.name ?? '未知', count: Number(r.count) }))
   }
 
   async findOne(id: string, ws: WorkspaceContext) {

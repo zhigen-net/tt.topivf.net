@@ -39,6 +39,13 @@ export class AssetsController {
     return this.svc.upload(file, ws, actor)
   }
 
+  // 必须排在 :id 前面，不然会被当成一个 id 交给 ParseUUIDPipe
+  @Get('uploaders')
+  @MinWorkspaceRole('viewer')
+  uploaders(@CurrentWorkspace() ws: WorkspaceContext) {
+    return this.svc.uploaders(ws)
+  }
+
   @Get(':id')
   @MinWorkspaceRole('viewer')
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentWorkspace() ws: WorkspaceContext) {

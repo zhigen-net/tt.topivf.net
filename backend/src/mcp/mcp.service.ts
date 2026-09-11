@@ -93,7 +93,7 @@ export class McpService {
       const res = await this.assets.findAll(ws, {
         ...args,
         limit: args.limit ?? 24,
-        unreferenced: unused ? 'true' : undefined,
+        referenced: unused ? 'false' : undefined,
       })
       return json({
         total: res.total,

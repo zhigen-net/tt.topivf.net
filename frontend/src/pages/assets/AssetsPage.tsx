@@ -6,14 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AssetThumb } from '@/components/assets/AssetThumb'
+import {
+  AssetFilters, activeFilterCount, toQueryParams, useAssetFilters,
+} from '@/components/assets/AssetFilters'
 import { api } from '@/lib/api'
 import { useWorkspace } from '@/lib/workspace'
 import { tooLargeReason } from '@/lib/upload'
-import type { Asset, AssetType, PaginatedResponse } from '@/types'
-
-type Filter = 'all' | AssetType | 'unreferenced'
+import type { Asset, PaginatedResponse } from '@/types'
 
 const PAGE_SIZE = 24
 
@@ -22,31 +22,23 @@ export default function AssetsPage() {
   const { can } = useWorkspace()
   const canEdit = can('member')
   const fileInput = useRef<HTMLInputElement>(null)
-  const [filter, setFilter] = useState<Filter>('all')
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const { filters, patch, reset } = useAssetFilters()
+  const [searchInput, setSearchInput] = useState(filters.search)
   const [removing, setRemoving] = useState<Asset | null>(null)
   // 存 id 不存对象：分享链接生成后列表会刷新，弹层得跟着拿到新的那份
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [sizeError, setSizeError] = useState<string | null>(null)
 
-  // 每敲一个字就打一次接口没必要，停下来再查
+  // 每敲一个字就打一次接口没必要，停下来再写回地址栏
   useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    const trimmed = searchInput.trim()
+    if (trimmed === filters.search) return
+    const t = setTimeout(() => patch({ search: trimmed }), 300)
     return () => clearTimeout(t)
-  }, [searchInput])
+  }, [searchInput, filters.search, patch])
 
-  useEffect(() => setPage(1), [search, filter])
-
-  const params = useMemo(() => ({
-    search: search || undefined,
-    type: filter === 'video' || filter === 'image' ? filter : undefined,
-    unreferenced: filter === 'unreferenced' ? 'true' : undefined,
-    page,
-    limit: PAGE_SIZE,
-  }), [search, filter, page])
+  const params = useMemo(() => toQueryParams(filters, PAGE_SIZE), [filters])
 
   const { data, isLoading } = useQuery({
     queryKey: ['assets', params],
@@ -130,23 +122,16 @@ export default function AssetsPage() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="搜索文件名"
-          className="max-w-56"
-        />
-        <Select value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部</SelectItem>
-            <SelectItem value="video">视频</SelectItem>
-            <SelectItem value="image">图片</SelectItem>
-            <SelectItem value="unreferenced">未被引用</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <AssetFilters
+        filters={filters}
+        patch={patch}
+        reset={() => {
+          setSearchInput('')
+          reset()
+        }}
+        searchInput={searchInput}
+        onSearchInput={setSearchInput}
+      />
 
       {sizeError && <p className="text-sm text-destructive">{sizeError}</p>}
 
@@ -164,7 +149,7 @@ export default function AssetsPage() {
         </div>
       ) : assets.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          {search || filter !== 'all' ? '没有匹配的素材' : '还没有素材'}
+          {activeFilterCount(filters) ? '没有匹配的素材' : '还没有素材'}
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -214,11 +199,21 @@ export default function AssetsPage() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
-          <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={filters.page <= 1}
+            onClick={() => patch({ page: filters.page - 1 })}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-muted-foreground tabular-nums">第 {page} / {totalPages} 页</span>
-          <Button variant="outline" size="icon" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+          <span className="text-sm text-muted-foreground tabular-nums">第 {filters.page} / {totalPages} 页</span>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={filters.page >= totalPages}
+            onClick={() => patch({ page: filters.page + 1 })}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
