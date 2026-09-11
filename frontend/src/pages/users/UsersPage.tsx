@@ -10,7 +10,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { useMe } from '@/lib/auth'
-import type { User, UserRole } from '@/types'
+import { WORKSPACE_ROLE_LABELS } from '@/lib/workspace-labels'
+import type { User, UserRole, Workspace, WorkspaceRole } from '@/types'
+
+/** 建号时怎么处理空间归属，和后端 CreateUserDto.workspaceMode 对应 */
+type WorkspaceMode = 'join' | 'create' | 'none'
+const WS_ROLES: WorkspaceRole[] = ['manager', 'member', 'viewer']
 
 export default function UsersPage() {
   const qc = useQueryClient()
@@ -80,6 +85,29 @@ export default function UsersPage() {
     )
   }
 
+  function workspaceCell(u: User) {
+    // 平台管理员在任何空间都是 manager，列出他那几行成员关系反而会让人以为只有这几个
+    if (u.role === 'admin') return <span className="text-xs text-muted-foreground">全部空间</span>
+
+    const list = u.workspaces ?? []
+    if (!list.length) return <span className="text-xs text-muted-foreground">未分配</span>
+
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {list.slice(0, 2).map((w) => (
+          <Badge key={w.id} variant="outline" className="text-xs font-normal" title={WORKSPACE_ROLE_LABELS[w.role]}>
+            {w.name}
+          </Badge>
+        ))}
+        {list.length > 2 && (
+          <span className="text-xs text-muted-foreground" title={list.map((w) => w.name).join('、')}>
+            +{list.length - 2}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -125,6 +153,7 @@ export default function UsersPage() {
                 </div>
                 {roleBadge(u)}
               </div>
+              {workspaceCell(u)}
               <div className="flex items-center justify-between gap-2 border-t pt-2">
                 <span className="text-xs text-muted-foreground">
                   {activeToggle(u)} · {u.lastLoginAt ? formatTime(u.lastLoginAt) : '从未登录'}
@@ -141,6 +170,7 @@ export default function UsersPage() {
               <tr>
                 <th className="px-3 py-2.5 text-left font-medium">用户</th>
                 <th className="w-28 px-3 py-2.5 text-left font-medium">角色</th>
+                <th className="w-56 px-3 py-2.5 text-left font-medium">工作空间</th>
                 <th className="w-24 px-3 py-2.5 text-left font-medium">状态</th>
                 <th className="w-40 px-3 py-2.5 text-left font-medium">最近登录</th>
                 <th className="w-40 px-3 py-2.5" />
@@ -159,6 +189,7 @@ export default function UsersPage() {
                     </p>
                   </td>
                   <td className="px-3 py-2">{roleBadge(u)}</td>
+                  <td className="px-3 py-2">{workspaceCell(u)}</td>
                   <td className="px-3 py-2">{activeToggle(u)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
                     {u.lastLoginAt ? formatTime(u.lastLoginAt) : '从未登录'}
@@ -208,6 +239,18 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<UserRole>('user')
+  const [wsMode, setWsMode] = useState<WorkspaceMode>('none')
+  const [wsId, setWsId] = useState('')
+  const [wsRole, setWsRole] = useState<WorkspaceRole>('member')
+  const [wsName, setWsName] = useState('')
+
+  // 和 useWorkspace 共用同一个 queryKey，缓存跟着复用
+  const { data: workspaces = [] } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => api.get<Workspace[]>('/workspaces').then((r) => r.data),
+    staleTime: 5 * 60_000,
+    enabled: open && !user,
+  })
 
   useEffect(() => {
     if (!open) return
@@ -216,24 +259,49 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
     setDisplayName(user?.displayName ?? '')
     setRole(user?.role ?? 'user')
     setPassword('')
+    setWsMode('none')
+    setWsId('')
+    setWsRole('member')
+    setWsName('')
   }, [open, user])
+
+  /** 切到「新建空间」时拿显示名垫一下，之后随便改 */
+  function pickWsMode(mode: WorkspaceMode) {
+    setWsMode(mode)
+    if (mode === 'create' && !wsName.trim()) setWsName(displayName.trim())
+  }
 
   const mutation = useMutation({
     mutationFn: (): Promise<unknown> =>
       user
         ? api.patch(`/users/${user.id}`, { displayName, role, email: email.trim() })
-        : api.post('/users', { username, password, displayName, role, email: email.trim() }),
+        : api.post('/users', {
+          username, password, displayName, role, email: email.trim(),
+          workspaceMode: wsMode,
+          ...(wsMode === 'join' ? { workspaceId: wsId, workspaceRole: wsRole } : {}),
+          ...(wsMode === 'create' ? { workspaceName: wsName.trim() } : {}),
+        }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
+      // 新建空间会让空间列表变长，切换器得跟着刷新
+      if (wsMode === 'create') qc.invalidateQueries({ queryKey: ['workspaces'] })
       onClose()
     },
   })
+
+  // 空间名没有唯一约束，重名不拦，但得提醒——切换器里两个同名空间根本分不出来
+  const duplicateName = wsMode === 'create'
+    && workspaces.some((w) => w.name.trim() === wsName.trim())
+
+  const wsOk = wsMode === 'none'
+    || (wsMode === 'join' && wsId !== '')
+    || (wsMode === 'create' && wsName.trim().length > 0)
 
   // 邮箱是唯一的登录凭据，留空会被后端打回，这里先把提交按钮压住
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
   const valid = emailOk && (user
     ? displayName.trim().length > 0
-    : username.trim().length >= 3 && displayName.trim().length > 0 && password.length >= 8)
+    : username.trim().length >= 3 && displayName.trim().length > 0 && password.length >= 8 && wsOk)
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -288,6 +356,62 @@ function UserFormDialog({ open, user, onClose }: { open: boolean; user: User | n
               {role === 'admin' ? '可以审核作品、管理用户' : '可以创建作品并提交审核，不能自己审核'}
             </p>
           </div>
+
+          {!user && (
+            <div className="space-y-1.5">
+              <Label>工作空间</Label>
+              <Select value={wsMode} onValueChange={(v) => pickWsMode(v as WorkspaceMode)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="join">加入现有空间</SelectItem>
+                  <SelectItem value="create">新建空间</SelectItem>
+                  <SelectItem value="none">暂不分配</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {wsMode === 'join' && (
+                <div className="space-y-1.5 pt-1">
+                  <Select value={wsId} onValueChange={setWsId}>
+                    <SelectTrigger><SelectValue placeholder="选择空间" /></SelectTrigger>
+                    <SelectContent>
+                      {workspaces.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={wsRole} onValueChange={(v) => setWsRole(v as WorkspaceRole)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {WS_ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>{WORKSPACE_ROLE_LABELS[r]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {wsMode === 'create' && (
+                <div className="space-y-1.5 pt-1">
+                  <Input value={wsName} onChange={(e) => setWsName(e.target.value)} placeholder="空间名称" />
+                  <p className="text-xs text-muted-foreground">
+                    {displayName.trim() || '该用户'} 将成为这个空间的管理员
+                  </p>
+                  {duplicateName && (
+                    <p className="text-xs text-amber-600">
+                      已经有一个叫「{wsName.trim()}」的空间了，切换器里会分不清
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {wsMode === 'none' && (
+                <p className="text-xs text-muted-foreground">
+                  该用户登录后看不到任何数据，需要之后在工作空间里再分配
+                </p>
+              )}
+            </div>
+          )}
+
           {mutation.isError && <p className="text-sm text-destructive">{errorText(mutation.error)}</p>}
         </div>
 

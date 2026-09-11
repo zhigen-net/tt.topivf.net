@@ -1,9 +1,16 @@
-import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator'
+import {
+  IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID,
+  Matches, MaxLength, MinLength, ValidateIf,
+} from 'class-validator'
 import { ApiProperty, ApiPropertyOptional, PartialType, OmitType } from '@nestjs/swagger'
 import { MaxBytes } from './max-bytes.validator'
 import type { UserRole } from '../user.entity'
+import { WORKSPACE_ROLES, type WorkspaceRole } from '../../workspaces/workspace-member.entity'
 
 export const USER_ROLES = ['admin', 'user'] as const
+
+export const WORKSPACE_MODES = ['join', 'create', 'none'] as const
+export type WorkspaceMode = (typeof WORKSPACE_MODES)[number]
 
 const PASSWORD_MAX_BYTES = 72
 const PASSWORD_TOO_LONG = '密码过长：bcrypt 只认前 72 字节，一个汉字占 3 字节'
@@ -37,9 +44,41 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(USER_ROLES)
   role?: UserRole
+
+  @ApiPropertyOptional({ enum: WORKSPACE_MODES, description: '不传按 none 处理' })
+  @IsOptional()
+  @IsIn(WORKSPACE_MODES)
+  workspaceMode?: WorkspaceMode
+
+  @ApiPropertyOptional({ description: 'workspaceMode=join 时必填' })
+  @ValidateIf((o: CreateUserDto) => o.workspaceMode === 'join')
+  @IsUUID()
+  workspaceId?: string
+
+  @ApiPropertyOptional({ enum: WORKSPACE_ROLES, description: 'workspaceMode=join 时的角色，默认 member' })
+  @ValidateIf((o: CreateUserDto) => o.workspaceMode === 'join' && o.workspaceRole !== undefined)
+  @IsIn(WORKSPACE_ROLES)
+  workspaceRole?: WorkspaceRole
+
+  @ApiPropertyOptional({ description: 'workspaceMode=create 时必填' })
+  @ValidateIf((o: CreateUserDto) => o.workspaceMode === 'create')
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  workspaceName?: string
 }
 
-export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['username', 'password'] as const)) {
+/**
+ * 空间归属只在建号那一刻处理，改归属是「迁移」语义（要退旧空间、判唯一管理员、
+ * 作废 MCP 密钥），走工作空间管理页。不 Omit 掉的话这几个字段会被 PATCH 悄悄收下
+ * 再被 Object.assign 丢弃，调用方以为改了其实没有。
+ */
+export class UpdateUserDto extends PartialType(
+  OmitType(CreateUserDto, [
+    'username', 'password',
+    'workspaceMode', 'workspaceId', 'workspaceRole', 'workspaceName',
+  ] as const),
+) {
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()

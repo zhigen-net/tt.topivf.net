@@ -42,6 +42,13 @@ export interface Asset {
   shareExpiresAt: string | null
 }
 
+/** 用户所属空间，只有管理员视角的 GET /users 会返回 */
+export interface UserWorkspace {
+  id: string
+  name: string
+  role: WorkspaceRole
+}
+
 export interface User {
   id: string
   username: string
@@ -52,6 +59,7 @@ export interface User {
   isActive: boolean
   lastLoginAt?: string
   createdAt: string
+  workspaces?: UserWorkspace[]
 }
 
 export interface Account {

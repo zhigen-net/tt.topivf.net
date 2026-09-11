@@ -36,8 +36,8 @@ export class UsersController {
 
   @Post()
   @Roles('admin')
-  create(@Body() dto: CreateUserDto) {
-    return this.svc.create(dto)
+  create(@Body() dto: CreateUserDto, @CurrentUser() me: User) {
+    return this.svc.create(dto, me.id)
   }
 
   @Patch(':id')

@@ -3,12 +3,16 @@ import {
   NotFoundException, OnModuleInit, UnauthorizedException,
 } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { DataSource, Not, Repository } from 'typeorm'
+import { DataSource, In, Not, Repository } from 'typeorm'
 import * as bcrypt from 'bcryptjs'
 import { User } from './user.entity'
 import { ChangePasswordDto, CreateUserDto, UpdateProfileDto, UpdateUserDto } from './dto/user.dto'
+import { Workspace } from '../workspaces/workspace.entity'
+import { WorkspaceMember, type WorkspaceRole } from '../workspaces/workspace-member.entity'
 
 const ROUNDS = 10
+
+export type UserWorkspace = { id: string, name: string, role: WorkspaceRole }
 
 /** 邮箱大小写不敏感，统一按小写存，登录时也按小写比 */
 function normalizeEmail(email: string) {
@@ -21,6 +25,8 @@ export class UsersService implements OnModuleInit {
 
   constructor(
     @InjectRepository(User) private repo: Repository<User>,
+    @InjectRepository(Workspace) private workspaces: Repository<Workspace>,
+    @InjectRepository(WorkspaceMember) private members: Repository<WorkspaceMember>,
     private readonly ds: DataSource,
   ) {}
 
@@ -38,8 +44,26 @@ export class UsersService implements OnModuleInit {
     this.logger.warn('已创建初始管理员 admin，请尽快修改密码')
   }
 
-  findAll() {
-    return this.repo.find({ order: { createdAt: 'ASC' } })
+  async findAll() {
+    const users = await this.repo.find({ order: { createdAt: 'ASC' } })
+    if (!users.length) return []
+
+    const rows = await this.members.find({
+      where: { userId: In(users.map((u) => u.id)) },
+      relations: { workspace: true },
+      order: { createdAt: 'ASC' },
+    })
+    const byUser = new Map<string, UserWorkspace[]>()
+    for (const m of rows) {
+      if (!m.workspace) continue
+      const item = { id: m.workspaceId, name: m.workspace.name, role: m.role }
+      const list = byUser.get(m.userId)
+      if (list) list.push(item)
+      else byUser.set(m.userId, [item])
+    }
+
+    // 挂在实例上而不是展开成字面量：展开会丢掉类原型，@Exclude 失效，密码哈希就跟着出去了
+    return users.map((u) => Object.assign(u, { workspaces: byUser.get(u.id) ?? [] }))
   }
 
   findById(id: string) {
@@ -69,19 +93,50 @@ export class UsersService implements OnModuleInit {
     return this.repo.findOneBy({ email: normalizeEmail(email) })
   }
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorId: string) {
     if (await this.repo.findOneBy({ username: dto.username })) {
       throw new ConflictException('用户名已存在')
     }
     const email = await this.claimEmail(dto.email)
+    // 放在事务外算，bcrypt 要几百毫秒，没必要占着连接
+    const passwordHash = await bcrypt.hash(dto.password, ROUNDS)
 
-    return this.repo.save(this.repo.create({
-      username: dto.username,
-      email,
-      passwordHash: await bcrypt.hash(dto.password, ROUNDS),
-      displayName: dto.displayName,
-      role: dto.role ?? 'user',
-    }))
+    // 建号、建空间、写成员关系同生共死，否则会留下没归属的用户或没人管的空空间
+    return this.ds.transaction(async (em) => {
+      const user = await em.save(em.create(User, {
+        username: dto.username,
+        email,
+        passwordHash,
+        displayName: dto.displayName,
+        role: dto.role ?? 'user',
+      }))
+
+      if (dto.workspaceMode === 'join') {
+        if (!await em.existsBy(Workspace, { id: dto.workspaceId })) {
+          throw new NotFoundException('工作空间不存在')
+        }
+        await em.save(em.create(WorkspaceMember, {
+          workspaceId: dto.workspaceId,
+          userId: user.id,
+          role: dto.workspaceRole ?? 'member',
+        }))
+      }
+
+      if (dto.workspaceMode === 'create') {
+        const ws = await em.save(em.create(Workspace, {
+          name: dto.workspaceName,
+          createdById: user.id,
+        }))
+        // 新人是拥有者，但操作的管理员也得进来：否则新人成了唯一 manager，
+        // assertNotSoleManager 会让这个号从建出来那刻起就删不掉
+        await em.save([
+          em.create(WorkspaceMember, { workspaceId: ws.id, userId: user.id, role: 'manager' }),
+          em.create(WorkspaceMember, { workspaceId: ws.id, userId: actorId, role: 'manager' }),
+        ])
+      }
+
+      return user
+    })
   }
 
   async update(id: string, dto: UpdateUserDto) {
