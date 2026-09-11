@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AssetThumb } from '@/components/assets/AssetThumb'
 import { api } from '@/lib/api'
 import { useWorkspace } from '@/lib/workspace'
+import { tooLargeReason } from '@/lib/upload'
 import type { Asset, AssetType, PaginatedResponse } from '@/types'
 
 type Filter = 'all' | AssetType | 'unreferenced'
@@ -29,6 +30,7 @@ export default function AssetsPage() {
   // 存 id 不存对象：分享链接生成后列表会刷新，弹层得跟着拿到新的那份
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [sizeError, setSizeError] = useState<string | null>(null)
 
   // 每敲一个字就打一次接口没必要，停下来再查
   useEffect(() => {
@@ -119,8 +121,11 @@ export default function AssetsPage() {
           accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp,image/gif"
           onChange={(e) => {
             const file = e.target.files?.[0]
-            if (file) upload.mutate(file)
             e.target.value = ''
+            if (!file) return
+            const reason = tooLargeReason(file)
+            setSizeError(reason)
+            if (!reason) upload.mutate(file)
           }}
         />
       </div>
@@ -142,6 +147,8 @@ export default function AssetsPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {sizeError && <p className="text-sm text-destructive">{sizeError}</p>}
 
       {(upload.isError || remove.isError || share.isError || unshare.isError) && (
         <p className="text-sm text-destructive">
@@ -300,7 +307,7 @@ function formatSize(bytes: number): string {
 
 function errorText(err: unknown): string {
   if (isAxiosError(err)) {
-    if (err.response?.status === 413) return '文件太大，超过了服务端上限。'
+    if (err.response?.status === 413) return '文件太大被拦下了，上限是 95 MB。'
     const msg = (err.response?.data as { message?: string | string[] } | undefined)?.message
     if (Array.isArray(msg)) return msg.join('；')
     if (msg) return msg

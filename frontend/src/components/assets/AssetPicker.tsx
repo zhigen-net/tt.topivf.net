@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { AssetThumb } from './AssetThumb'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { tooLargeReason } from '@/lib/upload'
 import type { Asset, AssetType, PaginatedResponse } from '@/types'
 
 interface Props {
@@ -26,6 +27,7 @@ const ACCEPT: Record<AssetType | 'all', string> = {
 export function AssetPicker({ value, onChange, type, disabled }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [sizeError, setSizeError] = useState<string | null>(null)
   const qc = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -109,12 +111,16 @@ export function AssetPicker({ value, onChange, type, disabled }: Props) {
               accept={ACCEPT[type ?? 'all']}
               onChange={(e) => {
                 const file = e.target.files?.[0]
-                if (file) upload.mutate(file)
                 e.target.value = ''
+                if (!file) return
+                const reason = tooLargeReason(file)
+                setSizeError(reason)
+                if (!reason) upload.mutate(file)
               }}
             />
           </div>
 
+          {sizeError && <p className="text-sm text-destructive">{sizeError}</p>}
           {upload.isError && <p className="text-sm text-destructive">上传失败，请重试。</p>}
 
           <div className="max-h-96 overflow-y-auto">
