@@ -78,84 +78,96 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑作品' : '新建作品'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>标题</Label>
-              <Input placeholder="作品标题" value={form.title} onChange={(e) => set('title', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>类型</Label>
-              <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {allContentTypes.map((t) => (
-                    <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
+          <div className="grid gap-5 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+            {/* 左栏：作品长什么样 */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>作品文件</Label>
+                <AssetPicker
+                  value={form.assetId}
+                  onChange={(a) => set('assetId', a?.id ?? null)}
+                  type={form.type === 'image' ? 'image' : 'video'}
+                />
+                {!form.assetId && (
+                  <>
+                    <Input placeholder="或填外链 https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
+                    <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>封面 <span className="text-muted-foreground">（选填）</span></Label>
+                <AssetPicker
+                  value={form.thumbnailAssetId}
+                  onChange={(a) => set('thumbnailAssetId', a?.id ?? null)}
+                  type="image"
+                />
+                {!form.thumbnailAssetId && (
+                  <Input placeholder="或填外链 https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>类型</Label>
+                <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {allContentTypes.map((t) => (
+                      <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>目标平台</Label>
+                <div className="flex flex-wrap gap-2">
+                  {allPlatforms.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => togglePlatform(p)}
+                      className={`rounded-md px-3 py-1 text-xs font-medium border transition-colors ${
+                        form.platforms.includes(p)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-input text-muted-foreground hover:bg-accent'
+                      }`}
+                    >
+                      {platformLabel[p]}
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>作品文件</Label>
-            <AssetPicker
-              value={form.assetId}
-              onChange={(a) => set('assetId', a?.id ?? null)}
-              type={form.type === 'image' ? 'image' : 'video'}
-            />
-            {!form.assetId && (
-              <>
-                <Input placeholder="或填外链 https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
-                <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
-              </>
-            )}
-          </div>
+            {/* 右栏：作品写了什么，文案撑满剩下的高度 */}
+            <div className="flex flex-col gap-4">
+              <div className="space-y-1.5">
+                <Label>标题</Label>
+                <Input placeholder="作品标题" value={form.title} onChange={(e) => set('title', e.target.value)} />
+              </div>
 
-          <div className="space-y-1.5">
-            <Label>封面 <span className="text-muted-foreground">（选填）</span></Label>
-            <AssetPicker
-              value={form.thumbnailAssetId}
-              onChange={(a) => set('thumbnailAssetId', a?.id ?? null)}
-              type="image"
-            />
-            {!form.thumbnailAssetId && (
-              <Input placeholder="或填外链 https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
-            )}
-          </div>
+              <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
+                <Label>文案</Label>
+                <Textarea
+                  placeholder="写点什么…"
+                  value={form.caption}
+                  onChange={(e) => set('caption', e.target.value)}
+                  className="min-h-[12rem] flex-1 resize-none"
+                />
+              </div>
 
-          <div className="space-y-1.5">
-            <Label>文案</Label>
-            <Textarea placeholder="写点什么…" rows={3} value={form.caption} onChange={(e) => set('caption', e.target.value)} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>话题标签</Label>
-            <Input placeholder="#热门 #推荐" value={form.hashtags} onChange={(e) => set('hashtags', e.target.value)} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>目标平台</Label>
-            <div className="flex flex-wrap gap-2">
-              {allPlatforms.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => togglePlatform(p)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium border transition-colors ${
-                    form.platforms.includes(p)
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-input text-muted-foreground hover:bg-accent'
-                  }`}
-                >
-                  {platformLabel[p]}
-                </button>
-              ))}
+              <div className="space-y-1.5">
+                <Label>话题标签</Label>
+                <Input placeholder="#热门 #推荐" value={form.hashtags} onChange={(e) => set('hashtags', e.target.value)} />
+              </div>
             </div>
           </div>
 
