@@ -58,11 +58,11 @@ export class ContentsService {
       .getManyAndCount()
 
     const summaries = await this.publishSummaries(data.map((c) => c.id))
-    const thumbs = await this.assetsService.signedUrlsFor(
+    const thumbs = await this.assetsService.thumbUrlsFor(
       data.map((c) => c.thumbnailAssetId).filter((id): id is string => !!id),
     )
     // 没单独设封面的作品，退而用配图本身当封面
-    const covers = await this.assetsService.signedImageUrlsFor(
+    const covers = await this.assetsService.thumbImageUrlsFor(
       data.filter((c) => !c.thumbnailUrl && !c.thumbnailAssetId)
         .map((c) => c.assetId)
         .filter((id): id is string => !!id),

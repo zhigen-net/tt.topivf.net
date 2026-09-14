@@ -32,6 +32,13 @@ export class Asset {
   @Column({ nullable: true })
   duration?: number
 
+  /**
+   * 缩略图对象键。只有图片才有；生成失败或历史素材没回填时为空，
+   * 取用方要自己退回原图，不能假定它一定在。
+   */
+  @Column({ name: 'thumb_key', type: 'varchar', nullable: true })
+  thumbKey?: string | null
+
   @Column({ name: 'uploaded_by_id', type: 'uuid', nullable: true })
   uploadedById?: string
 

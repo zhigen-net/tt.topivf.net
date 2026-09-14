@@ -67,21 +67,27 @@ export function AssetPicker({ value, onChange, type, disabled }: Props) {
   return (
     <>
       {value ? (
-        <div className="flex items-center gap-2 rounded-md border p-2">
-          {current && <AssetThumb asset={current} className="h-10 w-10 shrink-0 rounded" />}
-          <span className="min-w-0 flex-1 truncate text-sm">{current?.filename ?? '素材加载中…'}</span>
-          {!disabled && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>更换</Button>
-              <button
-                title="移除"
-                onClick={() => onChange(null)}
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </>
-          )}
+        <div className="space-y-2 rounded-md border p-2">
+          {current
+            ? <AssetThumb asset={current} className="aspect-video w-full rounded" />
+            : <div className="aspect-video w-full animate-pulse rounded bg-muted" />}
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm" title={current?.filename}>
+              {current?.filename ?? '素材加载中…'}
+            </span>
+            {!disabled && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>更换</Button>
+                <button
+                  title="移除"
+                  onClick={() => onChange(null)}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       ) : (
         <Button variant="outline" className="w-full" onClick={() => setOpen(true)} disabled={disabled}>

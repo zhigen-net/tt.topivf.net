@@ -1,22 +1,30 @@
-import { FileVideo } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Asset } from '@/types'
 
-/** 视频不做预览图，直接放个占位；签名直链本身够拉整段视频，没必要为缩略图再多传一次 */
+/**
+ * 图片走后端压好的小图，没有就退回原图。
+ * 视频没有服务端缩略图，挂 #t=0.1 让浏览器自己跳到第一帧渲染出来——
+ * 比放个灰图标强得多，代价只是拉视频开头的几百 KB。
+ */
 export function AssetThumb({ asset, className }: { asset: Asset; className?: string }) {
   if (asset.type === 'image') {
     return (
       <img
-        src={asset.url}
+        src={asset.thumbUrl ?? asset.url}
         alt={asset.filename}
         loading="lazy"
         className={cn('bg-muted object-cover', className)}
       />
     )
   }
+
   return (
-    <div className={cn('flex items-center justify-center bg-muted', className)}>
-      <FileVideo className="h-8 w-8 text-muted-foreground" />
-    </div>
+    <video
+      src={`${asset.url}#t=0.1`}
+      preload="metadata"
+      muted
+      playsInline
+      className={cn('bg-muted object-cover', className)}
+    />
   )
 }

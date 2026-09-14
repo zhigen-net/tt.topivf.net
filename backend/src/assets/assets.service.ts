@@ -1,12 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
-import { In, Repository } from 'typeorm'
+import { In, type FindOptionsWhere, Repository } from 'typeorm'
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { extname } from 'path'
 import { Asset, type AssetType } from './asset.entity'
 import { AssetStorageService } from './asset-storage.service'
 import { fetchRemoteFile } from './remote-fetch'
+import { THUMB_MIME, makeThumbnail, thumbKeyFor } from './thumbnail'
 import { QueryAssetsDto } from './dto/asset.dto'
 import { Content } from '../contents/content.entity'
 import type { User } from '../users/user.entity'
@@ -37,6 +38,9 @@ const PUBLISH_URL_TTL_MS = 60 * 60 * 1000
 
 /** 浏览器走的是 nginx 的 /api，后端自己的路由树上没有这一段 */
 const BROWSER_PREFIX = '/api'
+
+/** 挂在签名后面切到缩略图。签名只覆盖 id/空间/过期，所以加这一段不影响校验 */
+const THUMB_SUFFIX = '&v=thumb'
 
 /** 分享链接的默认时长。够把链接发出去、对方过几天想起来还能打开。上限在 ShareAssetDto 里管 */
 const SHARE_TTL_DAYS_DEFAULT = 30
@@ -155,6 +159,8 @@ export class AssetsService {
     const objectKey = `${ws.id}/${randomUUID()}${extname(filename).slice(0, 10)}`
     await this.storage.put(objectKey, buffer, mimeType)
 
+    const thumbKey = type === 'image' ? await this.putThumbnail(objectKey, buffer) : null
+
     const asset = await this.repo.save(this.repo.create({
       workspaceId: ws.id,
       objectKey,
@@ -162,10 +168,21 @@ export class AssetsService {
       mimeType,
       size: buffer.length,
       type,
+      thumbKey,
       uploadedById: actor.id,
       uploadedBy: actor.displayName,
     }))
     return this.view(asset, false)
+  }
+
+  /** 存一张缩略图，返回它的对象键；生成不出来就返回 null，取用方退回原图 */
+  async putThumbnail(objectKey: string, buffer: Buffer) {
+    const thumb = await makeThumbnail(buffer)
+    if (!thumb) return null
+
+    const key = thumbKeyFor(objectKey)
+    await this.storage.put(key, thumb, THUMB_MIME)
+    return key
   }
 
   async findAll(ws: WorkspaceContext, query: QueryAssetsDto) {
@@ -242,18 +259,28 @@ export class AssetsService {
     return asset
   }
 
-  /** 批量取签名直链，给作品列表回填缩略图用 */
+  /** 批量取签名直链，原图。预览弹层要看大图，走这条 */
   async signedUrlsFor(ids: string[]): Promise<Map<string, string>> {
-    if (!ids.length) return new Map()
-    const assets = await this.repo.findBy({ id: In([...new Set(ids)]) })
-    return new Map(assets.map((a) => [a.id, BROWSER_PREFIX + this.signedUrl(a)]))
+    return this.urlsFor({ id: In([...new Set(ids)]) }, ids.length, false)
+  }
+
+  /** 列表里那一栏小图，有缩略图就用缩略图，省的是几十倍的流量 */
+  async thumbUrlsFor(ids: string[]): Promise<Map<string, string>> {
+    return this.urlsFor({ id: In([...new Set(ids)]) }, ids.length, true)
   }
 
   /** 同上，但只认图片：视频素材塞进 img 标签只会渲染成裂图 */
-  async signedImageUrlsFor(ids: string[]): Promise<Map<string, string>> {
-    if (!ids.length) return new Map()
-    const assets = await this.repo.findBy({ id: In([...new Set(ids)]), type: 'image' })
-    return new Map(assets.map((a) => [a.id, BROWSER_PREFIX + this.signedUrl(a)]))
+  async thumbImageUrlsFor(ids: string[]): Promise<Map<string, string>> {
+    return this.urlsFor({ id: In([...new Set(ids)]), type: 'image' }, ids.length, true)
+  }
+
+  private async urlsFor(where: FindOptionsWhere<Asset>, count: number, thumb: boolean) {
+    if (!count) return new Map<string, string>()
+    const assets = await this.repo.findBy(where)
+    return new Map(assets.map((a) => [
+      a.id,
+      BROWSER_PREFIX + this.signedUrl(a) + (thumb && a.thumbKey ? THUMB_SUFFIX : ''),
+    ]))
   }
 
   async findOneView(id: string, ws: WorkspaceContext) {
@@ -269,6 +296,7 @@ export class AssetsService {
     await this.repo.delete(asset.id)
     // 先删记录再删对象：反过来失败时会留下一条指向空对象的坏记录
     await this.storage.remove(asset.objectKey)
+    if (asset.thumbKey) await this.storage.remove(asset.thumbKey)
   }
 
   /** 开一条分享链接；重复调用会换一个新令牌，旧链接当场失效 */
@@ -293,7 +321,7 @@ export class AssetsService {
   }
 
   /** 校验签名并回流对象内容；这条路没有 JWT，能不能读全看签名 */
-  async openSigned(id: string, token: string) {
+  async openSigned(id: string, token: string, wantThumb = false) {
     const asset = await this.repo.findOneBy({ id })
     if (!asset) throw new NotFoundException('素材不存在')
 
@@ -304,11 +332,11 @@ export class AssetsService {
       throw new ForbiddenException('链接签名无效')
     }
 
-    return { asset, stream: await this.storage.get(asset.objectKey) }
+    return this.body(asset, wantThumb)
   }
 
   /** 分享链接走这条：令牌是库里存的，撤销即刻生效 */
-  async openShared(id: string, token: string) {
+  async openShared(id: string, token: string, wantThumb = false) {
     const asset = await this.repo.findOneBy({ id })
     if (!asset?.shareToken || !asset.shareExpiresAt) {
       throw new ForbiddenException('分享链接已被撤销')
@@ -323,7 +351,17 @@ export class AssetsService {
       throw new ForbiddenException('分享链接无效')
     }
 
-    return { asset, stream: await this.storage.get(asset.objectKey) }
+    return this.body(asset, wantThumb)
+  }
+
+  /** 要缩略图但这条素材没有，就回原图，别让页面拿到 404 */
+  private async body(asset: Asset, wantThumb: boolean) {
+    const thumb = wantThumb && asset.thumbKey
+    return {
+      asset,
+      mimeType: thumb ? THUMB_MIME : asset.mimeType,
+      stream: await this.storage.get(thumb ? asset.thumbKey! : asset.objectKey),
+    }
   }
 
   view(asset: Asset, referenced: boolean) {
@@ -338,6 +376,8 @@ export class AssetsService {
       createdAt: asset.createdAt,
       referenced,
       url: BROWSER_PREFIX + this.signedUrl(asset),
+      // 没有缩略图就是 null，前端据此退回原图，别在这里替它兜底
+      thumbUrl: asset.thumbKey ? BROWSER_PREFIX + this.signedUrl(asset) + THUMB_SUFFIX : null,
       ...this.shareView(asset),
     }
   }
@@ -354,8 +394,13 @@ export class AssetsService {
     }
   }
 
+  /**
+   * exp 按 ttl 对齐到固定边界，而不是每次都取 now+ttl。
+   * 否则接口每响应一次就换一个新 URL，浏览器和 CDN 的缓存键永远对不上，
+   * 响应头里的 max-age 等于白写。代价是实际有效期在 ttl 到 2*ttl 之间浮动。
+   */
   private signedUrl(asset: Asset, ttl = RAW_URL_TTL_MS) {
-    const exp = Date.now() + ttl
+    const exp = Math.ceil((Date.now() + ttl) / ttl) * ttl
     const sig = createHmac('sha256', this.secret)
       .update(this.payload(asset.id, asset.workspaceId, exp))
       .digest('hex')

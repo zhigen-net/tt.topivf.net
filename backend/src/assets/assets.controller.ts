@@ -84,13 +84,18 @@ export class AssetsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query('t') token: string,
     @Query('s') shareToken: string,
+    @Query('v') variant: string,
     @Res() res: Response,
   ) {
-    const { asset, stream } = shareToken
-      ? await this.svc.openShared(id, shareToken)
-      : await this.svc.openSigned(id, token ?? '')
-    res.setHeader('Content-Type', asset.mimeType)
-    res.setHeader('Cache-Control', 'private, max-age=600')
+    const wantThumb = variant === 'thumb'
+    const { mimeType, stream } = shareToken
+      ? await this.svc.openShared(id, shareToken, wantThumb)
+      : await this.svc.openSigned(id, token ?? '', wantThumb)
+
+    res.setHeader('Content-Type', mimeType)
+    // 签名直链自带过期时间且撤不回来，让 CDN 也存一份没有额外损失，省掉每张图的回源。
+    // 分享链接不一样，它能随时撤销，边缘缓存会让撤销延迟生效，所以只许浏览器自己缓存。
+    res.setHeader('Cache-Control', shareToken ? 'private, max-age=60' : 'public, max-age=600')
     stream.pipe(res)
   }
 }

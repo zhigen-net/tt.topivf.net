@@ -38,6 +38,8 @@ export interface Asset {
   referenced: boolean
   /** 带短时签名的直链，过期后要重新拉列表 */
   url: string
+  /** 压过的小图，只有图片才有；历史素材没回填时也是 null，取用方要退回 url */
+  thumbUrl: string | null
   /** 可撤销的长期分享链接，没开或已过期都是 null */
   shareUrl: string | null
   shareExpiresAt: string | null
