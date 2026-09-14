@@ -148,10 +148,11 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>类型</Label>
+              {/* 类型和平台是次要的开关，压扁一点，高度让给预览 */}
+              <div className="flex items-center gap-2">
+                <Label className="shrink-0 text-xs text-muted-foreground">类型</Label>
                 <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {allContentTypes.map((t) => (
                       <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
@@ -160,15 +161,15 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>目标平台</Label>
-                <div className="flex flex-wrap gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">目标平台</Label>
+                <div className="flex flex-wrap gap-1.5">
                   {allPlatforms.map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => togglePlatform(p)}
-                      className={`rounded-md px-3 py-1 text-xs font-medium border transition-colors ${
+                      className={`rounded px-2 py-0.5 text-[11px] font-medium border transition-colors ${
                         form.platforms.includes(p)
                           ? 'bg-primary text-primary-foreground border-primary'
                           : 'border-input text-muted-foreground hover:bg-accent'
