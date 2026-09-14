@@ -8,7 +8,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AssetPicker } from '@/components/assets/AssetPicker'
 import { api } from '@/lib/api'
-import { contentTypeLabel, platformLabel, allPlatforms, allContentTypes } from './constants'
+import { useAllAccounts } from '@/lib/accounts'
+import {
+  contentTypeLabel,
+  platformLabel,
+  platformContentTypes,
+  allPlatforms,
+  allContentTypes,
+} from './constants'
 import type { Content, ContentType, Platform } from '@/types'
 
 interface Props {
@@ -59,7 +66,8 @@ const EMPTY: FormState = {
   thumbnailUrl: '',
   caption: '',
   hashtags: '',
-  platforms: ['tiktok'],
+  // 不预设平台：勾错平台的作品在批量发布时会被静默跳过，宁可让用户自己选一次
+  platforms: [],
 }
 
 export function ContentFormDialog({ open, content, onClose }: Props) {
@@ -68,11 +76,31 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [slot, setSlot] = useState<AssetSlot>('asset')
 
+  const accounts = useAllAccounts(open)
+  const owned = new Set(accounts.map((a) => a.platform))
+  // 空间里没账号的平台勾了也发不出去。但历史作品可能勾着这种平台，
+  // 那就继续显示，否则一打开编辑就被静默改掉了
+  const platformOptions = allPlatforms.filter((p) => owned.has(p) || form.platforms.includes(p))
+  const typeOptions = allContentTypes.filter((t) =>
+    t === form.type ||
+    form.platforms.length === 0 ||
+    form.platforms.some((p) => platformContentTypes[p].includes(t)),
+  )
+
   useEffect(() => {
     if (!open) return
     setForm(content ? toForm(content) : EMPTY)
     setSlot('asset')
   }, [open, content])
+
+  // 账号是异步拉的，回来时表单可能已经被改过，所以只在还没选平台时才补默认值
+  const ownedKey = [...owned].sort().join(',')
+  useEffect(() => {
+    if (!open || isEdit) return
+    const only = ownedKey.split(',').filter(Boolean)
+    if (only.length !== 1) return
+    setForm((prev) => (prev.platforms.length ? prev : { ...prev, platforms: only as Platform[] }))
+  }, [open, isEdit, ownedKey])
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -154,7 +182,7 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
                 <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {allContentTypes.map((t) => (
+                    {typeOptions.map((t) => (
                       <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
                     ))}
                   </SelectContent>
@@ -163,8 +191,11 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
 
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">目标平台</Label>
+                {platformOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">当前空间还没有任何平台账号</p>
+                ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {allPlatforms.map((p) => (
+                  {platformOptions.map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -179,6 +210,7 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
                     </button>
                   ))}
                 </div>
+                )}
               </div>
             </div>
 

@@ -19,6 +19,19 @@ export const platformLabel: Record<Platform, string> = {
   facebook: 'Facebook',
 }
 
+/**
+ * 各平台实际能收哪些类型，照后端适配器的分支写死：
+ * Facebook 四种都发得了，Instagram 的 reel/story 走独立的 media_type，
+ * 另外三家目前只走通用图文视频，没有 reel/story 的概念。
+ */
+export const platformContentTypes: Record<Platform, ContentType[]> = {
+  facebook: ['video', 'image', 'reel', 'story'],
+  instagram: ['video', 'image', 'reel', 'story'],
+  tiktok: ['video'],
+  youtube: ['video'],
+  twitter: ['video', 'image'],
+}
+
 export const allReviewStatuses: ReviewStatus[] = ['draft', 'pending', 'approved', 'rejected']
 
 export const reviewStatusLabel: Record<ReviewStatus, string> = {

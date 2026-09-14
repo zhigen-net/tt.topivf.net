@@ -107,7 +107,16 @@ export class TasksService {
     if (content.reviewStatus !== 'approved') {
       throw new BadRequestException('作品未通过审核，不能发布')
     }
-    await this.assertAccountsInWorkspace(dto.accountIds, workspaceId)
+    const accounts = await this.loadAccountsInWorkspace(dto.accountIds, workspaceId)
+
+    // 批量发布会把平台对不上的账号裁掉，单条发布以前什么都不查，
+    // 同一个约束在两条路径上不一致，作品声明的目标平台从这里就能绕过去
+    const offPlatform = accounts.filter((a) => !content.platforms.includes(a.platform))
+    if (offPlatform.length) {
+      throw new BadRequestException(
+        `账号 ${offPlatform.map((a) => a.username).join('、')} 的平台不在作品的目标平台内`,
+      )
+    }
 
     return this.enqueue({
       workspaceId,
@@ -119,11 +128,12 @@ export class TasksService {
   }
 
   /** 账号列表来自请求体，不逐个验空间就能把作品发到别人的账号上 */
-  private async assertAccountsInWorkspace(ids: string[], workspaceId: string) {
-    const found = await this.accounts.countBy({ id: In(ids), workspaceId })
-    if (found !== new Set(ids).size) {
+  private async loadAccountsInWorkspace(ids: string[], workspaceId: string) {
+    const found = await this.accounts.findBy({ id: In(ids), workspaceId })
+    if (found.length !== new Set(ids).size) {
       throw new NotFoundException('部分账号不存在或不属于当前工作空间')
     }
+    return found
   }
 
   /**

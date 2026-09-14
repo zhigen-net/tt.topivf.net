@@ -62,3 +62,30 @@ describe('TasksService 账号补全', () => {
     expect(task.accounts.map((a) => a.displayName)).toEqual(['账号二'])
   })
 })
+
+function makePublisher(platforms: string[]) {
+  const repo = {
+    create: jest.fn((x) => x),
+    save: jest.fn(async (x) => ({ ...x, id: 't-new', scheduledAt: new Date() })),
+  }
+  const contents = {
+    findOneBy: jest.fn().mockResolvedValue({ id: 'c-1', reviewStatus: 'approved', platforms }),
+  }
+  const accounts = { findBy: jest.fn().mockResolvedValue(ACCOUNTS) }
+  const queue = { add: jest.fn() }
+  return new TasksService(repo as any, contents as any, accounts as any, queue as any)
+}
+
+describe('TasksService 单条发布的平台校验', () => {
+  it('账号平台都在作品目标平台内就放行', async () => {
+    const svc = makePublisher(['facebook', 'instagram'])
+    const task = await svc.create({ contentId: 'c-1', accountIds: ['a-1', 'a-2'] } as any, WS)
+    expect(task.id).toBe('t-new')
+  })
+
+  it('账号平台不在作品目标平台内就拒绝，并点名是哪个账号', async () => {
+    const svc = makePublisher(['facebook'])
+    await expect(svc.create({ contentId: 'c-1', accountIds: ['a-1', 'a-2'] } as any, WS))
+      .rejects.toThrow('beta')
+  })
+})
