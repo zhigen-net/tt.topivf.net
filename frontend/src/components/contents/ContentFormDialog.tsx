@@ -107,7 +107,7 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid gap-5 md:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+          <div className="grid gap-5 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
             {/* 左栏：作品长什么样。作品文件和封面共用一个大预览，用标签切 */}
             <div className="space-y-4">
               <div className="space-y-2">

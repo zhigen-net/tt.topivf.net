@@ -68,9 +68,11 @@ export function AssetPicker({ value, onChange, type, disabled }: Props) {
     <>
       {value ? (
         <div className="space-y-2 rounded-md border p-2">
+          {/* 固定高度而不是固定比例：素材横竖都有，按比例缩进这个高度里就不会裁掉内容，
+              高度定死了切标签时布局也不跳 */}
           {current
-            ? <AssetThumb asset={current} className="aspect-video w-full rounded" />
-            : <div className="aspect-video w-full animate-pulse rounded bg-muted" />}
+            ? <AssetThumb asset={current} className="h-40 w-full rounded" />
+            : <div className="h-40 w-full animate-pulse rounded bg-muted" />}
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-sm" title={current?.filename}>
               {current?.filename ?? '素材加载中…'}
@@ -95,7 +97,7 @@ export function AssetPicker({ value, onChange, type, disabled }: Props) {
           type="button"
           onClick={() => setOpen(true)}
           disabled={disabled}
-          className="flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          className="flex h-40 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         >
           <ImagePlus className="h-6 w-6" />
           从素材库选择
