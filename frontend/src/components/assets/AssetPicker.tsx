@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Upload, X } from 'lucide-react'
+import { Check, ImagePlus, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -90,9 +90,16 @@ export function AssetPicker({ value, onChange, type, disabled }: Props) {
           </div>
         </div>
       ) : (
-        <Button variant="outline" className="w-full" onClick={() => setOpen(true)} disabled={disabled}>
+        // 空状态也占满一个预览位，否则在标签之间来回切时整块高度会跳
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          className="flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+        >
+          <ImagePlus className="h-6 w-6" />
           从素材库选择
-        </Button>
+        </button>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -18,6 +18,26 @@ interface Props {
   onClose: () => void
 }
 
+type AssetSlot = 'asset' | 'cover'
+
+function SlotTab({ active, onClick, children }: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+        active ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 interface FormState {
   title: string
   type: ContentType
@@ -46,10 +66,12 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
   const qc = useQueryClient()
   const isEdit = Boolean(content)
   const [form, setForm] = useState<FormState>(EMPTY)
+  const [slot, setSlot] = useState<AssetSlot>('asset')
 
   useEffect(() => {
     if (!open) return
     setForm(content ? toForm(content) : EMPTY)
+    setSlot('asset')
   }, [open, content])
 
   const mutation = useMutation({
@@ -75,6 +97,7 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
   }
 
   const canSubmit = form.title.trim().length > 0 && form.platforms.length > 0 && !mutation.isPending
+  const hasCover = Boolean(form.thumbnailAssetId) || form.thumbnailUrl.trim().length > 0
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -84,33 +107,44 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid gap-5 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-            {/* 左栏：作品长什么样 */}
+          <div className="grid gap-5 md:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+            {/* 左栏：作品长什么样。作品文件和封面共用一个大预览，用标签切 */}
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>作品文件</Label>
-                <AssetPicker
-                  value={form.assetId}
-                  onChange={(a) => set('assetId', a?.id ?? null)}
-                  type={form.type === 'image' ? 'image' : 'video'}
-                />
-                {!form.assetId && (
-                  <>
-                    <Input placeholder="或填外链 https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
-                    <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
-                  </>
-                )}
-              </div>
+              <div className="space-y-2">
+                <div className="flex gap-1 rounded-md bg-muted p-1">
+                  <SlotTab active={slot === 'asset'} onClick={() => setSlot('asset')}>作品文件</SlotTab>
+                  {/* 大部分作品其实没设封面，合并预览后不写出来就看不见了 */}
+                  <SlotTab active={slot === 'cover'} onClick={() => setSlot('cover')}>
+                    封面{hasCover ? '' : ' · 未设置'}
+                  </SlotTab>
+                </div>
 
-              <div className="space-y-1.5">
-                <Label>封面 <span className="text-muted-foreground">（选填）</span></Label>
-                <AssetPicker
-                  value={form.thumbnailAssetId}
-                  onChange={(a) => set('thumbnailAssetId', a?.id ?? null)}
-                  type="image"
-                />
-                {!form.thumbnailAssetId && (
-                  <Input placeholder="或填外链 https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
+                {slot === 'asset' ? (
+                  <div className="space-y-1.5">
+                    <AssetPicker
+                      value={form.assetId}
+                      onChange={(a) => set('assetId', a?.id ?? null)}
+                      type={form.type === 'image' ? 'image' : 'video'}
+                    />
+                    {!form.assetId && (
+                      <>
+                        <Input placeholder="或填外链 https://…" value={form.fileUrl} onChange={(e) => set('fileUrl', e.target.value)} />
+                        <p className="text-xs text-muted-foreground">平台会自己来拉这个地址，必须是公网可访问的 http/https 链接</p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <AssetPicker
+                      value={form.thumbnailAssetId}
+                      onChange={(a) => set('thumbnailAssetId', a?.id ?? null)}
+                      type="image"
+                    />
+                    {!form.thumbnailAssetId && (
+                      <Input placeholder="或填外链 https://…" value={form.thumbnailUrl} onChange={(e) => set('thumbnailUrl', e.target.value)} />
+                    )}
+                    <p className="text-xs text-muted-foreground">封面选填，不设就用作品文件本身</p>
+                  </div>
                 )}
               </div>
 
