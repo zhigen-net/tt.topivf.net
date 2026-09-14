@@ -176,19 +176,6 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
                 )}
               </div>
 
-              {/* 类型和平台是次要的开关，压扁一点，高度让给预览 */}
-              <div className="flex items-center gap-2">
-                <Label className="shrink-0 text-xs text-muted-foreground">类型</Label>
-                <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {typeOptions.map((t) => (
-                      <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">目标平台</Label>
                 {platformOptions.length === 0 ? (
@@ -214,20 +201,36 @@ export function ContentFormDialog({ open, content, onClose }: Props) {
               </div>
             </div>
 
-            {/* 右栏：作品写了什么，文案撑满剩下的高度 */}
+            {/* 右栏：作品写了什么 */}
             <div className="flex flex-col gap-4">
-              <div className="space-y-1.5">
-                <Label>标题</Label>
-                <Input placeholder="作品标题" value={form.title} onChange={(e) => set('title', e.target.value)} />
+              {/* 类型就两三个字，单独占一行太浪费，跟标题挤一行 */}
+              <div className="flex gap-3">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label>标题</Label>
+                  <Input placeholder="作品标题" value={form.title} onChange={(e) => set('title', e.target.value)} />
+                </div>
+                <div className="w-28 shrink-0 space-y-1.5">
+                  <Label>类型</Label>
+                  <Select value={form.type} onValueChange={(v) => set('type', v as ContentType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {typeOptions.map((t) => (
+                        <SelectItem key={t} value={t}>{contentTypeLabel[t]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
+              <div className="space-y-1.5">
                 <Label>文案</Label>
+                {/* 跟着内容长，短文案就不留一大片空白；浏览器不支持 field-sizing 时
+                    退化成 min-h 那么高，也比原来钉死的 12rem 省地方 */}
                 <Textarea
                   placeholder="写点什么…"
                   value={form.caption}
                   onChange={(e) => set('caption', e.target.value)}
-                  className="min-h-[12rem] flex-1 resize-none"
+                  className="max-h-96 min-h-[6rem] resize-y field-sizing-content"
                 />
               </div>
 
